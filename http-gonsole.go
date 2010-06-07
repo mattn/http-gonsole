@@ -86,7 +86,7 @@ func main() {
 					tmp = path;
 				}
 				data := "";
-				if method == "POST" {
+				if method == "POST" || method == "PUT" {
 					data = *readline.ReadLine(nil);
 				}
 				r, err := doHttp(conn, method, schema + host + tmp, headers, data);
@@ -103,7 +103,7 @@ func main() {
 						b := make([]byte, n);
 						io.ReadFull(r.Body, b);
 						println(string(b));
-					} else {
+					} else if method != "HEAD" {
 						b, _ := ioutil.ReadAll(r.Body);
 						println(string(b));
 						conn = http.NewClientConn(tcp, nil);
