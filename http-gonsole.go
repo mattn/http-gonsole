@@ -95,7 +95,7 @@ func main() {
 					}
 					h := r.GetHeader("Content-Length");
 					if len(h) > 0 {
-						n, _ := strconv.Atoi64(r.GetHeader("Content-Length"));
+						n, _ := strconv.Atoi64(h);
 						b := make([]byte, n);
 						io.ReadFull(r.Body, b);
 						println(string(b));
@@ -103,6 +103,8 @@ func main() {
 						b, _ := ioutil.ReadAll(r.Body);
 						println(string(b));
 						conn = http.NewClientConn(tcp, nil);
+					} else {
+						// TODO: streaming?
 					}
 				} else {
 					fmt.Fprintln(os.Stderr, err.String());
