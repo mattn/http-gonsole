@@ -68,11 +68,6 @@ func main() {
 			}
 			continue;
 		}
-		if *line == "\\headers" {
-			for key, val := range headers {
-				println(key + ": " + val);
-			}
-		}
 		re, err := regexp.Compile("^(GET|POST|PUT|HEAD|DELETE)(.*)$");
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err.String());
@@ -92,6 +87,7 @@ func main() {
 				r, err := doHttp(conn, method, schema + host + tmp, headers, data);
 				if err == nil {
 					if len(r.Header) > 0 {
+						// TODO: colorful header display
 						for key, val := range r.Header {
 							println(key + ": " + val);
 						}
@@ -113,7 +109,16 @@ func main() {
 				}
 			}
 		}
-		if *line == "QUIT" {
+
+		if *line == "\\headers" {
+			for key, val := range headers {
+				println(key + ": " + val);
+			}
+		}
+		// TODO: .. to up to root path.
+		// TODO: \options to display options
+		// TODO: \cookies to display cookies
+		if *line == "q" || *line == "exit" {
 			os.Exit(0);
 		}
 	}
