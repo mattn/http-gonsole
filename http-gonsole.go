@@ -34,6 +34,9 @@ func doHttp(conn *http.ClientConn, method string, url string, headers map[string
 	req.Method = method;
 	req.Header = headers;
 	if len(cookies) > 0 {
+		for key, cookie := range cookies {
+			req.Header[key] = cookie.value
+		}
 	}
 	err = conn.Write(&req);
 	if err != nil {
@@ -54,7 +57,7 @@ func main() {
 	flag.Parse();
 	if flag.NArg() > 0 {
 		tmp := flag.Arg(0);
-		if match, _ := regexp.MatchString("^[^:]+(:[0-9]+)?", tmp); match {
+		if match, _ := regexp.MatchString("^[^:]+(:[0-9]+)?$", tmp); match {
 			tmp = "http://" + tmp;
 		}
 		targetURL, err := http.ParseURL(tmp);
@@ -78,6 +81,8 @@ func main() {
 			scheme = "https://";
 		}
 	}
+
+	headers["Host"] = host;
 
 	var tcp net.Conn;
 	if proxy := os.Getenv("HTTP_PROXY"); len(proxy) > 0 {
@@ -149,38 +154,48 @@ func main() {
 				}
 				r, err := doHttp(conn, method, scheme + "://" + host + tmp, headers, cookies, data);
 				if err == nil {
+					if r.StatusCode >= 500 {
+						println("\x1b[31m\x1b[1m" + r.Status + "\x1b[0m\x1b[22m");
+					} else if r.StatusCode >= 400 {
+						println("\x1b[33m\x1b[1m" + r.Status + "\x1b[0m\x1b[22m");
+					} else if r.StatusCode >= 300 {
+						println("\x1b[36m\x1b[1m" + r.Status + "\x1b[0m\x1b[22m");
+					} else if r.StatusCode >= 200 {
+						println("\x1b[32m\x1b[1m" + r.Status + "\x1b[0m\x1b[22m");
+					}
 					if len(r.Header) > 0 {
-						// TODO: colorful header display
 						for key, val := range r.Header {
-							println(key + ": " + val);
+							println("\x1b[1m" + key + "\x1b[22m: " + val);
 						}
 						println();
 					}
-					h := r.GetHeader("Set-Cookie");
-					if len(h) > 0 {
-						re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?");
-						for {
-							sep := re.AllMatchesString(h, 1);
-							if len(sep) == 0 {
-								break;
-							}
-							matches := strings.Split(sep[0], ";", 999);
-							key := "";
-							cookie := &Cookie{ "", make(map[string]string) };
-							for n := range matches {
-								tokens := strings.Split(strings.TrimSpace(matches[n]), "=", 2)
-								if n == 0 {
-									cookie.value = tokens[1];
-									key = tokens[0]
-								} else {
-									cookie.options[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1]);
+					if *rememberCookies {
+						h := r.GetHeader("Set-Cookie");
+						if len(h) > 0 {
+							re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?");
+							for {
+								sep := re.AllMatchesString(h, 1);
+								if len(sep) == 0 {
+									break;
 								}
+								matches := strings.Split(sep[0], ";", 999);
+								key := "";
+								cookie := &Cookie{ "", make(map[string]string) };
+								for n := range matches {
+									tokens := strings.Split(strings.TrimSpace(matches[n]), "=", 2)
+									if n == 0 {
+										cookie.value = tokens[1];
+										key = tokens[0]
+									} else {
+										cookie.options[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1]);
+									}
+								}
+								cookies[key] = cookie;
+								h = h[len(sep[0]):]
 							}
-							cookies[key] = cookie;
-							h = h[len(sep[0]):]
 						}
 					}
-					h = r.GetHeader("Content-Length");
+					h := r.GetHeader("Content-Length");
 					if len(h) > 0 {
 						n, _ := strconv.Atoi64(h);
 						b := make([]byte, n);
@@ -194,7 +209,7 @@ func main() {
 						// TODO: streaming?
 					}
 				} else {
-					fmt.Fprintln(os.Stderr, err.String());
+					os.Stderr.WriteString("\x1b[31m\x1b[1m" + err.String() + "\x1b[0m\x1b[22m\n");
 				}
 			}
 		}
