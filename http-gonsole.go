@@ -93,7 +93,8 @@ func main() {
 		}
 	} else {
 		if *useSSL {
-			scheme = "https://";
+			scheme = "https";
+			host = "localhost:443";
 		}
 	}
 
