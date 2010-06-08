@@ -53,7 +53,15 @@ func main() {
 	rememberCookies := flag.Bool("rememberCookies", false, "remember cookies");
 	flag.Parse();
 	if flag.NArg() > 0 {
-		targetURL, _ := http.ParseURL(flag.Arg(0));
+		tmp := flag.Arg(0);
+		if match, _ := regexp.MatchString("^[^:]+(:[0-9]+)?", tmp); match {
+			tmp = "http://" + tmp;
+		}
+		targetURL, err := http.ParseURL(tmp);
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err.String());
+			os.Exit(-1);
+		}
 		if targetURL.Scheme == "https" {
 			*useSSL = true;
 		}
