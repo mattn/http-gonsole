@@ -70,9 +70,13 @@ func main() {
 		}
 		scheme = targetURL.Scheme;
 		host = targetURL.Host;
+		if len(host) == 0 {
+			fmt.Fprintln(os.Stderr, "invalid host name");
+			os.Exit(-1);
+		}
 		pp := strings.Split(targetURL.Path, "/", -1);
 		for p := range pp {
-			if len(pp[p]) > 0 {
+			if len(pp[p]) > 0 || p == len(pp)-1 {
 				path.Push(pp[p]);
 			}
 		}
@@ -103,14 +107,21 @@ func main() {
 		if match, _ := regexp.MatchString("^/[^ ]*$", *line); match {
 			if *line == "//" {
 				path.Resize(0, 0);
-				println("bar");
 			} else {
-				pp := strings.Split(*line, "/", -1)
+				tmp := new(vector.StringVector);
+				pp := path.Data();
 				for p := range pp {
 					if len(pp[p]) > 0 {
-						path.Push(pp[p]);
+						tmp.Push(pp[p]);
 					}
 				}
+				pp = strings.Split(*line, "/", -1)
+				for p := range pp {
+					if len(pp[p]) > 0 || p == len(pp)-1 {
+						tmp.Push(pp[p]);
+					}
+				}
+				path = tmp;
 			}
 			continue;
 		}
