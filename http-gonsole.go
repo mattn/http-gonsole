@@ -22,15 +22,16 @@ func bool2string(b bool) string {
 }
 
 func doHttp(conn *http.ClientConn, method string, url string, headers map[string]string, data string) (*http.Response, os.Error) {
-	var r *http.Response;
 	var err os.Error;
 	var req http.Request;
 	req.URL, _ = http.ParseURL(url);
 	req.Method = method;
 	req.Header = headers;
 	err = conn.Write(&req);
-	r, err = conn.Read();
-	return r, err;
+	if err != nil {
+		return nil, err;
+	}
+	return conn.Read();
 }
 
 func main() {
@@ -120,13 +121,16 @@ func main() {
 					}
 					h := r.GetHeader("Set-Cookie");
 					if len(h) > 0 {
-						strings.Split(";")
-						re, err := regexp.Compile("^[:space:]*([^=]+)[:space:]*=[:space:]*(.*)[:space]*$");
+						re, err := regexp.Compile("[:space:]*([^=]+)[:space:]*=[:space:]*(.*)[:space]*;");
 						if err == nil {
 							matches := re.MatchStrings(h);
+							for n := range matches {
+								tokens := strings.Split(matches[n], "=", 2)
+								cookies[tokens[1]] = tokens[2];
+							}
 						}
 					}
-					h := r.GetHeader("Content-Length");
+					h = r.GetHeader("Content-Length");
 					if len(h) > 0 {
 						n, _ := strconv.Atoi64(h);
 						b := make([]byte, n);
