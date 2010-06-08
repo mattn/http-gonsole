@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"http"
 	"io"
@@ -12,6 +13,13 @@ import (
 	"strconv"
 	"strings"
 )
+
+func bool2string(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
+}
 
 func doHttp(conn *http.ClientConn, method string, url string, headers map[string]string, data string) (*http.Response, os.Error) {
 	var r *http.Response;
@@ -26,10 +34,27 @@ func doHttp(conn *http.ClientConn, method string, url string, headers map[string
 }
 
 func main() {
-	host := os.Args[1];
-	path := "";
+	host := "localhost:80";
+	path := "/";
 	headers := make(map[string]string);
-	schema := "http://";
+	cookies := make(map[string]string);
+	scheme := "http://";
+
+	useSSL := flag.Bool("useSSL", false, "use SSL");
+	rememberCookies := flag.Bool("rememberCookies", false, "remember cookies");
+	flag.Parse();
+	if flag.NArg() > 0 {
+		targetURL, _ := http.ParseURL(flag.Arg(0));
+		if targetURL.Scheme == "https" {
+			*useSSL = true;
+		}
+		scheme = targetURL.Scheme + "://";
+		host = targetURL.Host;
+	} else {
+		if *useSSL {
+			scheme = "https://";
+		}
+	}
 
 	var tcp net.Conn;
 	if proxy := os.Getenv("HTTP_PROXY"); len(proxy) > 0 {
@@ -41,13 +66,13 @@ func main() {
 	conn := http.NewClientConn(tcp, nil);
 
 	for {
-		prompt := host + path + "> ";
+		prompt := scheme + host + path + "> ";
 		line := readline.ReadLine(&prompt);
 		if len(*line) == 0 {
 			continue;
 		}
 		readline.AddHistory(*line);
-		if match, _ := regexp.MatchString("^/[^\\s]+$", *line); match {
+		if match, _ := regexp.MatchString("^/[^:space:]*$", *line); match {
 			path = *line;
 			continue;
 		}
@@ -77,14 +102,14 @@ func main() {
 			if len(matches) > 0 {
 				method := matches[1];
 				tmp := strings.TrimSpace(matches[2]);
-				if len(tmp) > 0 {
+				if len(tmp) == 0 {
 					tmp = path;
 				}
 				data := "";
 				if method == "POST" || method == "PUT" {
 					data = *readline.ReadLine(nil);
 				}
-				r, err := doHttp(conn, method, schema + host + tmp, headers, data);
+				r, err := doHttp(conn, method, scheme + host + tmp, headers, data);
 				if err == nil {
 					if len(r.Header) > 0 {
 						// TODO: colorful header display
@@ -92,6 +117,14 @@ func main() {
 							println(key + ": " + val);
 						}
 						println();
+					}
+					h := r.GetHeader("Set-Cookie");
+					if len(h) > 0 {
+						strings.Split(";")
+						re, err := regexp.Compile("^[:space:]*([^=]+)[:space:]*=[:space:]*(.*)[:space]*$");
+						if err == nil {
+							matches := re.MatchStrings(h);
+						}
 					}
 					h := r.GetHeader("Content-Length");
 					if len(h) > 0 {
@@ -117,10 +150,13 @@ func main() {
 				println(key + ": " + val);
 			}
 		}
+		if *line == "\\options" {
+			print("useSSL=" + bool2string(*useSSL) + ", rememberCookies=" + bool2string(*rememberCookies) + "\n");
+		}
 		// TODO: .. to up to root path.
 		// TODO: \options to display options
 		// TODO: \cookies to display cookies
-		if *line == "q" || *line == "exit" {
+		if *line == "\\q" || *line == "\\exit" {
 			os.Exit(0);
 		}
 	}
