@@ -12,6 +12,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"container/vector"
 )
 
 func bool2string(b bool) string {
@@ -21,12 +22,19 @@ func bool2string(b bool) string {
 	return "false"
 }
 
-func doHttp(conn *http.ClientConn, method string, url string, headers map[string]string, data string) (*http.Response, os.Error) {
+type Cookie struct {
+	value string
+	options map[string]string;
+}
+
+func doHttp(conn *http.ClientConn, method string, url string, headers map[string]string, cookies map[string]*Cookie, data string) (*http.Response, os.Error) {
 	var err os.Error;
 	var req http.Request;
 	req.URL, _ = http.ParseURL(url);
 	req.Method = method;
 	req.Header = headers;
+	if len(cookies) > 0 {
+	}
 	err = conn.Write(&req);
 	if err != nil {
 		return nil, err;
@@ -36,9 +44,9 @@ func doHttp(conn *http.ClientConn, method string, url string, headers map[string
 
 func main() {
 	host := "localhost:80";
-	path := "/";
+	path := new(vector.StringVector);
 	headers := make(map[string]string);
-	cookies := make(map[string]string);
+	cookies := make(map[string]*Cookie)
 	scheme := "http://";
 
 	useSSL := flag.Bool("useSSL", false, "use SSL");
@@ -67,15 +75,23 @@ func main() {
 	conn := http.NewClientConn(tcp, nil);
 
 	for {
-		prompt := scheme + host + path + "> ";
+		prompt := scheme + host + strings.Join(path.Data(), "/") + "> ";
 		line := readline.ReadLine(&prompt);
 		if len(*line) == 0 {
 			continue;
 		}
 		readline.AddHistory(*line);
-		if match, _ := regexp.MatchString("^/[^:space:]*$", *line); match {
-			path = *line;
+		if match, _ := regexp.MatchString("^/[^ ]*$", *line); match {
+			if *line == "//" {
+				path.Resize(0, 0);
+				println("bar");
+			} else {
+				path.Push(strings.Join(strings.Split(*line, "/", -1), "/"));
+			}
 			continue;
+		}
+		if *line == ".." {
+			path.Pop();
 		}
 		if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]*:.*", *line); match {
 			re, err := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]*):[:space:]*(.*)[:space]*$");
@@ -104,13 +120,13 @@ func main() {
 				method := matches[1];
 				tmp := strings.TrimSpace(matches[2]);
 				if len(tmp) == 0 {
-					tmp = path;
+					tmp = strings.Join(path.Data(), "/");
 				}
 				data := "";
 				if method == "POST" || method == "PUT" {
 					data = *readline.ReadLine(nil);
 				}
-				r, err := doHttp(conn, method, scheme + host + tmp, headers, data);
+				r, err := doHttp(conn, method, scheme + host + tmp, headers, cookies, data);
 				if err == nil {
 					if len(r.Header) > 0 {
 						// TODO: colorful header display
@@ -121,13 +137,26 @@ func main() {
 					}
 					h := r.GetHeader("Set-Cookie");
 					if len(h) > 0 {
-						re, err := regexp.Compile("[:space:]*([^=]+)[:space:]*=[:space:]*(.*)[:space]*;");
-						if err == nil {
-							matches := re.MatchStrings(h);
-							for n := range matches {
-								tokens := strings.Split(matches[n], "=", 2)
-								cookies[tokens[1]] = tokens[2];
+						re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?");
+						for {
+							sep := re.AllMatchesString(h, 1);
+							if len(sep) == 0 {
+								break;
 							}
+							matches := strings.Split(sep[0], ";", 999);
+							key := "";
+							cookie := &Cookie{ "", make(map[string]string) };
+							for n := range matches {
+								tokens := strings.Split(strings.TrimSpace(matches[n]), "=", 2)
+								if n == 0 {
+									cookie.value = tokens[1];
+									key = tokens[0]
+								} else {
+									cookie.options[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1]);
+								}
+							}
+							cookies[key] = cookie;
+							h = h[len(sep[0]):]
 						}
 					}
 					h = r.GetHeader("Content-Length");
@@ -154,12 +183,14 @@ func main() {
 				println(key + ": " + val);
 			}
 		}
+		if *line == "\\cookies" {
+			for key, val := range cookies {
+				println(key + ": " + val.value);
+			}
+		}
 		if *line == "\\options" {
 			print("useSSL=" + bool2string(*useSSL) + ", rememberCookies=" + bool2string(*rememberCookies) + "\n");
 		}
-		// TODO: .. to up to root path.
-		// TODO: \options to display options
-		// TODO: \cookies to display cookies
 		if *line == "\\q" || *line == "\\exit" {
 			os.Exit(0);
 		}
