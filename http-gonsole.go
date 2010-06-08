@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"http"
@@ -22,6 +23,12 @@ func bool2string(b bool) string {
 	return "false"
 }
 
+type myCloser struct {
+    io.Reader
+}
+
+func (myCloser) Close() os.Error { return nil }
+
 type Cookie struct {
 	value string
 	options map[string]string;
@@ -37,6 +44,10 @@ func doHttp(conn *http.ClientConn, method string, url string, headers map[string
 		for key, cookie := range cookies {
 			req.Header[key] = cookie.value
 		}
+	}
+	if len(data) > 0 {
+		req.ContentLength = int64(len(data));
+        req.Body = myCloser{ bytes.NewBufferString(data) }
 	}
 	err = conn.Write(&req);
 	if err != nil {
@@ -98,7 +109,7 @@ func main() {
 	conn := http.NewClientConn(tcp, nil);
 
 	for {
-		prompt := scheme + "://" + host + "/" + strings.Join(path.Data(), "/") + "> ";
+		prompt := "\x1b[90m" + scheme + "://" + host + "/" + strings.Join(path.Data(), "/") + "> \x1b[39m";
 		line := readline.ReadLine(&prompt);
 		if len(*line) == 0 {
 			continue;
@@ -166,13 +177,13 @@ func main() {
 				r, err := doHttp(conn, method, scheme + "://" + host + tmp, headers, cookies, data);
 				if err == nil {
 					if r.StatusCode >= 500 {
-						println("\x1b[31m\x1b[1m" + r.Status + "\x1b[0m\x1b[22m");
+						println("\x1b[31m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m");
 					} else if r.StatusCode >= 400 {
-						println("\x1b[33m\x1b[1m" + r.Status + "\x1b[0m\x1b[22m");
+						println("\x1b[33m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m");
 					} else if r.StatusCode >= 300 {
-						println("\x1b[36m\x1b[1m" + r.Status + "\x1b[0m\x1b[22m");
+						println("\x1b[36m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m");
 					} else if r.StatusCode >= 200 {
-						println("\x1b[32m\x1b[1m" + r.Status + "\x1b[0m\x1b[22m");
+						println("\x1b[32m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m");
 					}
 					if len(r.Header) > 0 {
 						for key, val := range r.Header {
@@ -220,7 +231,7 @@ func main() {
 						// TODO: streaming?
 					}
 				} else {
-					os.Stderr.WriteString("\x1b[31m\x1b[1m" + err.String() + "\x1b[0m\x1b[22m\n");
+					os.Stderr.WriteString("\x1b[31m\x1b[1m" + err.String() + "\x1b[39m\x1b[22m\n");
 				}
 			}
 		}
