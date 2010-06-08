@@ -46,8 +46,8 @@ func main() {
 	host := "localhost:80";
 	path := new(vector.StringVector);
 	headers := make(map[string]string);
-	cookies := make(map[string]*Cookie)
-	scheme := "http://";
+	cookies := make(map[string]*Cookie);
+	scheme := "http";
 
 	useSSL := flag.Bool("useSSL", false, "use SSL");
 	rememberCookies := flag.Bool("rememberCookies", false, "remember cookies");
@@ -57,8 +57,14 @@ func main() {
 		if targetURL.Scheme == "https" {
 			*useSSL = true;
 		}
-		scheme = targetURL.Scheme + "://";
+		scheme = targetURL.Scheme;
 		host = targetURL.Host;
+		pp := strings.Split(targetURL.Path, "/", -1);
+		for p := range pp {
+			if len(pp[p]) > 0 {
+				path.Push(pp[p]);
+			}
+		}
 	} else {
 		if *useSSL {
 			scheme = "https://";
@@ -75,7 +81,7 @@ func main() {
 	conn := http.NewClientConn(tcp, nil);
 
 	for {
-		prompt := scheme + host + strings.Join(path.Data(), "/") + "> ";
+		prompt := scheme + "://" + host + "/" + strings.Join(path.Data(), "/") + "> ";
 		line := readline.ReadLine(&prompt);
 		if len(*line) == 0 {
 			continue;
@@ -86,12 +92,19 @@ func main() {
 				path.Resize(0, 0);
 				println("bar");
 			} else {
-				path.Push(strings.Join(strings.Split(*line, "/", -1), "/"));
+				pp := strings.Split(*line, "/", -1)
+				for p := range pp {
+					if len(pp[p]) > 0 {
+						path.Push(pp[p]);
+					}
+				}
 			}
 			continue;
 		}
 		if *line == ".." {
-			path.Pop();
+			if path.Len() > 0 {
+				path.Pop();
+			}
 		}
 		if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]*:.*", *line); match {
 			re, err := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]*):[:space:]*(.*)[:space]*$");
@@ -120,13 +133,13 @@ func main() {
 				method := matches[1];
 				tmp := strings.TrimSpace(matches[2]);
 				if len(tmp) == 0 {
-					tmp = strings.Join(path.Data(), "/");
+					tmp = "/" + strings.Join(path.Data(), "/");
 				}
 				data := "";
 				if method == "POST" || method == "PUT" {
 					data = *readline.ReadLine(nil);
 				}
-				r, err := doHttp(conn, method, scheme + host + tmp, headers, cookies, data);
+				r, err := doHttp(conn, method, scheme + "://" + host + tmp, headers, cookies, data);
 				if err == nil {
 					if len(r.Header) > 0 {
 						// TODO: colorful header display
@@ -190,6 +203,14 @@ func main() {
 		}
 		if *line == "\\options" {
 			print("useSSL=" + bool2string(*useSSL) + ", rememberCookies=" + bool2string(*rememberCookies) + "\n");
+		}
+		if *line == "\\help" {
+			println("\\headers  show active request headers.\n" +
+					"\\options  show options.\n" +
+					"\\cookies  show client cookies.\n" +
+					"\\help     display this message.\n" +
+					"\\exit     exit console.\n" +
+					"\\q\n")
 		}
 		if *line == "\\q" || *line == "\\exit" {
 			os.Exit(0);
