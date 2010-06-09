@@ -141,13 +141,10 @@ func main() {
 			if path.Len() > 0 {
 				path.Pop();
 			}
+			continue;
 		}
 		if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]*:.*", *line); match {
-			re, err := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]*):[:space:]*(.*)[:space]*$");
-			if err != nil {
-				fmt.Fprintln(os.Stderr, err.String());
-				continue;
-			}
+			re, _ := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]*):[:space:]*(.*)[:space]*$");
 			matches := re.MatchStrings(*line);
 			headers[matches[1]] = matches[2];
 			tmp := make(map[string]string);
@@ -159,11 +156,8 @@ func main() {
 			}
 			continue;
 		}
-		re, err := regexp.Compile("^(GET|POST|PUT|HEAD|DELETE)(.*)$");
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err.String());
-			continue;
-		} else {
+		if match, _ := regexp.MatchString("^(GET|POST|PUT|HEAD|DELETE)(.*)$", *line); match {
+			re, _ := regexp.Compile("^(GET|POST|PUT|HEAD|DELETE)(.*)$");
 			matches := re.MatchStrings(*line);
 			if len(matches) > 0 {
 				method := matches[1];
@@ -235,20 +229,23 @@ func main() {
 					os.Stderr.WriteString("\x1b[31m\x1b[1m" + err.String() + "\x1b[39m\x1b[22m\n");
 				}
 			}
+			continue;
 		}
-
 		if *line == "\\headers" {
 			for key, val := range headers {
 				println(key + ": " + val);
 			}
+			continue;
 		}
 		if *line == "\\cookies" {
 			for key, val := range cookies {
 				println(key + ": " + val.value);
 			}
+			continue;
 		}
 		if *line == "\\options" {
 			print("useSSL=" + bool2string(*useSSL) + ", rememberCookies=" + bool2string(*rememberCookies) + "\n");
+			continue;
 		}
 		if *line == "\\help" {
 			println("\\headers  show active request headers.\n" +
@@ -257,9 +254,11 @@ func main() {
 					"\\help     display this message.\n" +
 					"\\exit     exit console.\n" +
 					"\\q\n")
+			continue;
 		}
 		if *line == "\\q" || *line == "\\exit" {
 			os.Exit(0);
 		}
+		os.Stderr.WriteString("\x1b[33m\x1b[1munknown command '" + *line + "'\x1b[39m\x1b[22m\n");
 	}
 }
