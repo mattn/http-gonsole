@@ -45,12 +45,15 @@ func doHttp(conn *http.ClientConn, method string, url string, headers map[string
 	req.Header = headers;
 	if len(cookies) > 0 {
 		for key, cookie := range cookies {
-			req.Header[key] = cookie.value
+			if len(req.Header["Cookie"]) > 0 {
+				req.Header["Cookie"] += ", ";
+			}
+			req.Header["Cookie"] = key + "=" + cookie.value
 		}
 	}
 	if len(data) > 0 {
 		req.ContentLength = int64(len(data));
-        req.Body = myCloser{ bytes.NewBufferString(data) }
+		req.Body = myCloser{ bytes.NewBufferString(data) }
 	}
 	err = conn.Write(&req);
 	if err != nil {
