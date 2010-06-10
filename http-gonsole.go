@@ -2,6 +2,9 @@ package main
 
 import (
 	"bytes"
+	"container/vector"
+	"crypto/rand"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"http"
@@ -13,7 +16,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"container/vector"
+	"time"
 )
 
 func bool2string(b bool) string {
@@ -76,15 +79,16 @@ func main() {
 			fmt.Fprintln(os.Stderr, err.String());
 			os.Exit(-1);
 		}
-		if targetURL.Scheme == "https" {
-			*useSSL = true;
-		}
-		scheme = targetURL.Scheme;
 		host = targetURL.Host;
 		if len(host) == 0 {
 			fmt.Fprintln(os.Stderr, "invalid host name");
 			os.Exit(-1);
 		}
+		if targetURL.Scheme == "https" {
+			*useSSL = true;
+			host += ":443";
+		}
+		scheme = targetURL.Scheme;
 		pp := strings.Split(targetURL.Path, "/", -1);
 		for p := range pp {
 			if len(pp[p]) > 0 || p == len(pp)-1 {
@@ -101,13 +105,30 @@ func main() {
 	headers["Host"] = host;
 
 	var tcp net.Conn;
-	if proxy := os.Getenv("HTTP_PROXY"); len(proxy) > 0 {
+	proxy := os.Getenv("HTTP_PROXY");
+	if len(proxy) > 0 {
 		proxy_url, _ := http.ParseURL(proxy);
 		tcp, _ = net.Dial("tcp", "", proxy_url.Host);
 	} else {
 		tcp, _ = net.Dial("tcp", "", host);
 	}
-	conn := http.NewClientConn(tcp, nil);
+
+	var conn *http.ClientConn;
+	if *useSSL {
+		cf := &tls.Config{ Rand: rand.Reader, Time: time.Nanoseconds };
+		ssl := tls.Client(tcp, cf);
+		conn = http.NewClientConn(ssl, nil);
+		if len(proxy) > 0 {
+			tcp.Write([]byte("CONNECT " + host + " HTTP/1.0\r\n\r\n"));
+			b := make([]byte, 1024)
+			tcp.Read(b);
+		}
+		defer ssl.Close();
+	} else {
+		conn = http.NewClientConn(tcp, nil);
+	}
+	defer conn.Close();
+	defer tcp.Close();
 
 	for {
 		prompt := "\x1b[90m" + scheme + "://" + host + "/" + strings.Join(path.Data(), "/") + "> \x1b[39m";
