@@ -46,7 +46,7 @@ func doHttp(conn *http.ClientConn, method string, url string, headers map[string
 	if len(cookies) > 0 {
 		for key, cookie := range cookies {
 			if len(req.Header["Cookie"]) > 0 {
-				req.Header["Cookie"] += ", ";
+				req.Header["Cookie"] += "; ";
 			}
 			req.Header["Cookie"] = key + "=" + cookie.value
 		}
