@@ -107,13 +107,18 @@ func main() {
 
 	headers["Host"] = host;
 
-	var tcp net.Conn;
+	var tcp net.Conn
+	var err os.Error
 	proxy := os.Getenv("HTTP_PROXY");
 	if len(proxy) > 0 {
 		proxy_url, _ := http.ParseURL(proxy);
-		tcp, _ = net.Dial("tcp", "", proxy_url.Host);
+		tcp, err = net.Dial("tcp", "", proxy_url.Host);
 	} else {
-		tcp, _ = net.Dial("tcp", "", host);
+		tcp, err = net.Dial("tcp", "", host);
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "http-gonsole: net.Dial failed --", err)
+		os.Exit(1)
 	}
 
 	var conn *http.ClientConn;
