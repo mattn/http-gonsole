@@ -1,3 +1,6 @@
+// Speak HTTP like a local -- a simple, intuitive HTTP console
+// This is a port of http://github.com/cloudhead/http-console
+
 package main
 
 import (
@@ -17,6 +20,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
+)
+
+var (
+	useSSL = flag.Bool("ssl", false, "use SSL")
+	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 )
 
 func bool2string(b bool) string {
@@ -69,8 +77,6 @@ func main() {
 	cookies := make(map[string]*Cookie)
 	scheme := "http"
 
-	useSSL := flag.Bool("useSSL", false, "use SSL")
-	rememberCookies := flag.Bool("rememberCookies", false, "remember cookies")
 	flag.Parse()
 	if flag.NArg() > 0 {
 		tmp := flag.Arg(0)
@@ -117,7 +123,7 @@ func main() {
 		tcp, err = net.Dial("tcp", "", host)
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "http-gonsole: net.Dial failed --", err)
+		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
 		os.Exit(1)
 	}
 
