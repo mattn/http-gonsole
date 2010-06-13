@@ -55,9 +55,8 @@ type Session struct {
 	path *vector.StringVector
 }
 
-func (s Session) Request(method, url, data string) (*http.Response, os.Error) {
+func (s Session) Request(method, url, data string) {
 	var req http.Request
-	var err os.Error
 	req.URL, _ = http.ParseURL(url)
 	req.Method = method
 	req.Header = s.headers
@@ -73,11 +72,69 @@ func (s Session) Request(method, url, data string) (*http.Response, os.Error) {
 		req.ContentLength = int64(len(data))
 		req.Body = myCloser{bytes.NewBufferString(data)}
 	}
-	err = s.conn.Write(&req)
+	err := s.conn.Write(&req)
 	if err != nil {
-		return nil, err
+		fmt.Fprintln(os.Stderr, err)
 	}
-	return s.conn.Read()
+	r, err := s.conn.Read()
+	if err == nil {
+		if r.StatusCode >= 500 {
+			println("\x1b[31m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		} else if r.StatusCode >= 400 {
+			println("\x1b[33m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		} else if r.StatusCode >= 300 {
+			println("\x1b[36m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		} else if r.StatusCode >= 200 {
+			println("\x1b[32m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		}
+		if len(r.Header) > 0 {
+			for key, val := range r.Header {
+				println("\x1b[1m" + key + "\x1b[22m: " + val)
+			}
+			println()
+		}
+		if *rememberCookies {
+			h := r.GetHeader("Set-Cookie")
+			if len(h) > 0 {
+				re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
+				for {
+					sep := re.AllMatchesString(h, 1)
+					if len(sep) == 0 {
+						break
+					}
+					matches := strings.Split(sep[0], ";", 999)
+					key := ""
+					cookie := &Cookie{"", make(map[string]string)}
+					for n := range matches {
+						tokens := strings.Split(strings.TrimSpace(matches[n]), "=", 2)
+						if n == 0 {
+							cookie.value = tokens[1]
+							key = tokens[0]
+						} else {
+							cookie.options[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1])
+						}
+					}
+					s.cookies[key] = cookie
+					h = h[len(sep[0]):]
+				}
+			}
+		}
+		h := r.GetHeader("Content-Length")
+		if len(h) > 0 {
+			n, _ := strconv.Atoi64(h)
+			b := make([]byte, n)
+			io.ReadFull(r.Body, b)
+			println(string(b))
+		} else if method != "HEAD" {
+			b, _ := ioutil.ReadAll(r.Body)
+			println(string(b))
+			s.conn = http.NewClientConn(s.tcp, nil)
+		} else {
+			// TODO: streaming?
+		}
+	} else {
+		os.Stderr.WriteString("\x1b[31m\x1b[1m" + err.String() + "\x1b[39m\x1b[22m\n")
+	}
 }
 
 // Parse a single command and execute it. (REPL without the loop part)
@@ -142,65 +199,7 @@ func (s Session) REPL() bool {
 			if method == "POST" || method == "PUT" {
 				data = *readline.ReadLine(nil)
 			}
-			r, err := s.Request(method, s.scheme+"://"+s.host+tmp, data)
-			if err == nil {
-				if r.StatusCode >= 500 {
-					println("\x1b[31m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
-				} else if r.StatusCode >= 400 {
-					println("\x1b[33m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
-				} else if r.StatusCode >= 300 {
-					println("\x1b[36m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
-				} else if r.StatusCode >= 200 {
-					println("\x1b[32m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
-				}
-				if len(r.Header) > 0 {
-					for key, val := range r.Header {
-						println("\x1b[1m" + key + "\x1b[22m: " + val)
-					}
-					println()
-				}
-				if *rememberCookies {
-					h := r.GetHeader("Set-Cookie")
-					if len(h) > 0 {
-						re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
-						for {
-							sep := re.AllMatchesString(h, 1)
-							if len(sep) == 0 {
-								break
-							}
-							matches := strings.Split(sep[0], ";", 999)
-							key := ""
-							cookie := &Cookie{"", make(map[string]string)}
-							for n := range matches {
-								tokens := strings.Split(strings.TrimSpace(matches[n]), "=", 2)
-								if n == 0 {
-									cookie.value = tokens[1]
-									key = tokens[0]
-								} else {
-									cookie.options[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1])
-								}
-							}
-							s.cookies[key] = cookie
-							h = h[len(sep[0]):]
-						}
-					}
-				}
-				h := r.GetHeader("Content-Length")
-				if len(h) > 0 {
-					n, _ := strconv.Atoi64(h)
-					b := make([]byte, n)
-					io.ReadFull(r.Body, b)
-					println(string(b))
-				} else if method != "HEAD" {
-					b, _ := ioutil.ReadAll(r.Body)
-					println(string(b))
-					s.conn = http.NewClientConn(s.tcp, nil)
-				} else {
-					// TODO: streaming?
-				}
-			} else {
-				os.Stderr.WriteString("\x1b[31m\x1b[1m" + err.String() + "\x1b[39m\x1b[22m\n")
-			}
+			s.Request(method, s.scheme+"://"+s.host+tmp, data)
 		}
 		return false
 	}
