@@ -78,7 +78,7 @@ func (s Session) Request(method, url, data string) {
 		os.Exit(1)
 	}
 	r, err := s.conn.Read()
-	if err.(*http.ProtocolError) == http.ErrPersistEOF {
+	if perr, ok := err.(*http.ProtocolError); ok && perr == http.ErrPersistEOF {
 		// TODO: server doesn't support persistent connection, need to redial
 	} else if err != nil {
 		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
