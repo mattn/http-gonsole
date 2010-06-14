@@ -85,19 +85,19 @@ func (s Session) Request(method, url, data string) {
 		os.Exit(1)
 	}
 	if r.StatusCode >= 500 {
-		println("\x1b[31m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		fmt.Println("\x1b[31m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
 	} else if r.StatusCode >= 400 {
-		println("\x1b[33m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		fmt.Println("\x1b[33m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
 	} else if r.StatusCode >= 300 {
-		println("\x1b[36m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		fmt.Println("\x1b[36m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
 	} else if r.StatusCode >= 200 {
-		println("\x1b[32m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		fmt.Println("\x1b[32m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
 	}
 	if len(r.Header) > 0 {
 		for key, val := range r.Header {
-			println("\x1b[1m" + key + "\x1b[22m: " + val)
+			fmt.Println("\x1b[1m" + key + "\x1b[22m: " + val)
 		}
-		println()
+		fmt.Println()
 	}
 	if *rememberCookies {
 		h := r.GetHeader("Set-Cookie")
@@ -130,10 +130,10 @@ func (s Session) Request(method, url, data string) {
 		n, _ := strconv.Atoi64(h)
 		b := make([]byte, n)
 		io.ReadFull(r.Body, b)
-		println(string(b))
+		fmt.Println(string(b))
 	} else if method != "HEAD" {
 		b, _ := ioutil.ReadAll(r.Body)
-		println(string(b))
+		fmt.Println(string(b))
 		s.conn = http.NewClientConn(s.tcp, nil)
 	} else {
 		// TODO: streaming?
@@ -213,22 +213,22 @@ func (s Session) REPL() bool {
 	}
 	if *line == "\\headers" {
 		for key, val := range s.headers {
-			println(key + ": " + val)
+			fmt.Println(key + ": " + val)
 		}
 		return false
 	}
 	if *line == "\\cookies" {
 		for key, val := range s.cookies {
-			println(key + ": " + val.value)
+			fmt.Println(key + ": " + val.value)
 		}
 		return false
 	}
 	if *line == "\\options" {
-		print("useSSL=" + bool2string(*useSSL) + ", rememberCookies=" + bool2string(*rememberCookies) + "\n")
+		fmt.Println("useSSL=" + bool2string(*useSSL) + ", rememberCookies=" + bool2string(*rememberCookies))
 		return false
 	}
 	if *line == "\\help" {
-		println("\\headers  show active request headers.\n" +
+		fmt.Println("\\headers  show active request headers.\n" +
 			"\\options  show options.\n" +
 			"\\cookies  show client cookies.\n" +
 			"\\help     display this message.\n" +
@@ -256,7 +256,7 @@ func main() {
 		}
 		targetURL, err := http.ParseURL(tmp)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err.String())
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(-1)
 		}
 		host = targetURL.Host
