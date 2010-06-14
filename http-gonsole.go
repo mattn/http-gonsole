@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	useSSL = flag.Bool("ssl", false, "use SSL")
+	useSSL          = flag.Bool("ssl", false, "use SSL")
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 )
 
@@ -46,13 +46,13 @@ type Cookie struct {
 }
 
 type Session struct {
-	scheme string
-	host string
-	tcp net.Conn
-	conn *http.ClientConn
+	scheme  string
+	host    string
+	tcp     net.Conn
+	conn    *http.ClientConn
 	headers map[string]string
 	cookies map[string]*Cookie
-	path *vector.StringVector
+	path    *vector.StringVector
 }
 
 func (s Session) Request(method, url, data string) {
@@ -150,24 +150,24 @@ func (s Session) REPL() bool {
 		if *line == "//" {
 			s.path.Resize(0, 0)
 		} else {
-			tmp := new(vector.StringVector);
-			pp := s.path.Data();
+			tmp := new(vector.StringVector)
+			pp := s.path.Data()
 			for p := range pp {
 				// remove empty element "/foo//bar" must be ["foo", "bar"]
 				if len(pp[p]) > 0 {
-					tmp.Push(pp[p]);
+					tmp.Push(pp[p])
 				}
 			}
 			pp = strings.Split(*line, "/", -1)
 			for p := range pp {
 				if len(pp[p]) > 0 || p == len(pp)-1 {
-					tmp.Push(pp[p]);
+					tmp.Push(pp[p])
 				}
 			}
 			s.path.Resize(0, 0)
-			pp = tmp.Data();
+			pp = tmp.Data()
 			for p := range pp {
-				s.path.Push(pp[p]);
+				s.path.Push(pp[p])
 			}
 		}
 		return false
@@ -269,7 +269,7 @@ func main() {
 		pp := strings.Split(targetURL.Path, "/", -1)
 		for p := range pp {
 			if len(pp[p]) > 0 || p == len(pp)-1 {
-				path.Push(pp[p]);
+				path.Push(pp[p])
 			}
 		}
 	} else if *useSSL {
@@ -307,15 +307,15 @@ func main() {
 	}
 	defer conn.Close()
 	defer tcp.Close()
-	
+
 	session := &Session{
-		scheme: scheme,
-		host: host,
-		tcp: tcp,
-		conn: conn,
+		scheme:  scheme,
+		host:    host,
+		tcp:     tcp,
+		conn:    conn,
 		headers: make(map[string]string),
 		cookies: make(map[string]*Cookie),
-		path: path,
+		path:    path,
 	}
 	session.headers["Host"] = host
 
