@@ -74,66 +74,69 @@ func (s Session) Request(method, url, data string) {
 	}
 	err := s.conn.Write(&req)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+		os.Exit(1)
 	}
 	r, err := s.conn.Read()
-	if err == nil {
-		if r.StatusCode >= 500 {
-			println("\x1b[31m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
-		} else if r.StatusCode >= 400 {
-			println("\x1b[33m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
-		} else if r.StatusCode >= 300 {
-			println("\x1b[36m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
-		} else if r.StatusCode >= 200 {
-			println("\x1b[32m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+	if err.(*http.ProtocolError) == http.ErrPersistEOF {
+		// TODO: server doesn't support persistent connection, need to redial
+	} else if err != nil {
+		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+		os.Exit(1)
+	}
+	if r.StatusCode >= 500 {
+		println("\x1b[31m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+	} else if r.StatusCode >= 400 {
+		println("\x1b[33m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+	} else if r.StatusCode >= 300 {
+		println("\x1b[36m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+	} else if r.StatusCode >= 200 {
+		println("\x1b[32m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+	}
+	if len(r.Header) > 0 {
+		for key, val := range r.Header {
+			println("\x1b[1m" + key + "\x1b[22m: " + val)
 		}
-		if len(r.Header) > 0 {
-			for key, val := range r.Header {
-				println("\x1b[1m" + key + "\x1b[22m: " + val)
-			}
-			println()
-		}
-		if *rememberCookies {
-			h := r.GetHeader("Set-Cookie")
-			if len(h) > 0 {
-				re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
-				for {
-					sep := re.AllMatchesString(h, 1)
-					if len(sep) == 0 {
-						break
-					}
-					matches := strings.Split(sep[0], ";", 999)
-					key := ""
-					cookie := &Cookie{"", make(map[string]string)}
-					for n := range matches {
-						tokens := strings.Split(strings.TrimSpace(matches[n]), "=", 2)
-						if n == 0 {
-							cookie.value = tokens[1]
-							key = tokens[0]
-						} else {
-							cookie.options[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1])
-						}
-					}
-					s.cookies[key] = cookie
-					h = h[len(sep[0]):]
-				}
-			}
-		}
-		h := r.GetHeader("Content-Length")
+		println()
+	}
+	if *rememberCookies {
+		h := r.GetHeader("Set-Cookie")
 		if len(h) > 0 {
-			n, _ := strconv.Atoi64(h)
-			b := make([]byte, n)
-			io.ReadFull(r.Body, b)
-			println(string(b))
-		} else if method != "HEAD" {
-			b, _ := ioutil.ReadAll(r.Body)
-			println(string(b))
-			s.conn = http.NewClientConn(s.tcp, nil)
-		} else {
-			// TODO: streaming?
+			re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
+			for {
+				sep := re.AllMatchesString(h, 1)
+				if len(sep) == 0 {
+					break
+				}
+				matches := strings.Split(sep[0], ";", 999)
+				key := ""
+				cookie := &Cookie{"", make(map[string]string)}
+				for n := range matches {
+					tokens := strings.Split(strings.TrimSpace(matches[n]), "=", 2)
+					if n == 0 {
+						cookie.value = tokens[1]
+						key = tokens[0]
+					} else {
+						cookie.options[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1])
+					}
+				}
+				s.cookies[key] = cookie
+				h = h[len(sep[0]):]
+			}
 		}
+	}
+	h := r.GetHeader("Content-Length")
+	if len(h) > 0 {
+		n, _ := strconv.Atoi64(h)
+		b := make([]byte, n)
+		io.ReadFull(r.Body, b)
+		println(string(b))
+	} else if method != "HEAD" {
+		b, _ := ioutil.ReadAll(r.Body)
+		println(string(b))
+		s.conn = http.NewClientConn(s.tcp, nil)
 	} else {
-		os.Stderr.WriteString("\x1b[31m\x1b[1m" + err.String() + "\x1b[39m\x1b[22m\n")
+		// TODO: streaming?
 	}
 }
 
