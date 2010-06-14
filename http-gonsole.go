@@ -48,14 +48,47 @@ type Cookie struct {
 type Session struct {
 	scheme  string
 	host    string
-	tcp     net.Conn
 	conn    *http.ClientConn
 	headers map[string]string
 	cookies map[string]*Cookie
 	path    *vector.StringVector
 }
 
-func (s Session) Request(method, url, data string) {
+func dial(host string) (conn *http.ClientConn) {
+	var tcp net.Conn
+	var err os.Error
+	proxy := os.Getenv("HTTP_PROXY")
+	if len(proxy) > 0 {
+		proxy_url, _ := http.ParseURL(proxy)
+		tcp, err = net.Dial("tcp", "", proxy_url.Host)
+	} else {
+		tcp, err = net.Dial("tcp", "", host)
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+		os.Exit(1)
+	}
+	if *useSSL {
+		cf := &tls.Config{Rand: rand.Reader, Time: time.Nanoseconds}
+		ssl := tls.Client(tcp, cf)
+		conn = http.NewClientConn(ssl, nil)
+		if len(proxy) > 0 {
+			tcp.Write([]byte("CONNECT " + host + " HTTP/1.0\r\n\r\n"))
+			b := make([]byte, 1024)
+			tcp.Read(b)
+		}
+	} else {
+		conn = http.NewClientConn(tcp, nil)
+	}
+	return
+}
+
+func (s Session) close() {
+	tcp, _ := s.conn.Close()
+	tcp.Close()
+}
+
+func (s Session) request(method, url, data string) {
 	var req http.Request
 	req.URL, _ = http.ParseURL(url)
 	req.Method = method
@@ -73,13 +106,23 @@ func (s Session) Request(method, url, data string) {
 		req.Body = myCloser{bytes.NewBufferString(data)}
 	}
 	err := s.conn.Write(&req)
+	if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
+		// the connection has been closed in an HTTP keepalive sense
+		s.conn = dial(s.host)
+		err = s.conn.Write(&req)
+	} else if err == io.ErrUnexpectedEOF {
+		// the underlying connection has been closed "gracefully"
+		s.conn = dial(s.host)
+		err = s.conn.Write(&req)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
 		os.Exit(1)
 	}
 	r, err := s.conn.Read()
-	if perr, ok := err.(*http.ProtocolError); ok && perr == http.ErrPersistEOF {
-		// TODO: server doesn't support persistent connection, need to redial
+	if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
+		// the remote requested that this be the last request serviced
+		s.conn = dial(s.host)
 	} else if err != nil {
 		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
 		os.Exit(1)
@@ -134,15 +177,14 @@ func (s Session) Request(method, url, data string) {
 	} else if method != "HEAD" {
 		b, _ := ioutil.ReadAll(r.Body)
 		fmt.Println(string(b))
-		s.conn = http.NewClientConn(s.tcp, nil)
 	} else {
 		// TODO: streaming?
 	}
 }
 
-// Parse a single command and execute it. (REPL without the loop part)
+// Parse a single command and execute it. (REPL without the loop)
 // Return true when the quit command is given.
-func (s Session) REPL() bool {
+func (s Session) repl() bool {
 	prompt := "\x1b[90m" + s.scheme + "://" + s.host + "/" + strings.Join(s.path.Data(), "/") + "> \x1b[39m"
 	line := readline.ReadLine(&prompt)
 	if len(*line) == 0 {
@@ -207,7 +249,7 @@ func (s Session) REPL() bool {
 			if method == "POST" || method == "PUT" {
 				data = *readline.ReadLine(nil)
 			}
-			s.Request(method, s.scheme+"://"+s.host+tmp, data)
+			s.request(method, s.scheme+"://"+s.host+tmp, data)
 		}
 		return false
 	}
@@ -247,7 +289,6 @@ func main() {
 	scheme := "http"
 	host := "localhost:80"
 	path := new(vector.StringVector)
-
 	flag.Parse()
 	if flag.NArg() > 0 {
 		tmp := flag.Arg(0)
@@ -256,7 +297,7 @@ func main() {
 		}
 		targetURL, err := http.ParseURL(tmp)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(os.Stderr, "malformed URL")
 			os.Exit(-1)
 		}
 		host = targetURL.Host
@@ -279,51 +320,17 @@ func main() {
 		scheme = "https"
 		host = "localhost:443"
 	}
-
-	var tcp net.Conn
-	var err os.Error
-	proxy := os.Getenv("HTTP_PROXY")
-	if len(proxy) > 0 {
-		proxy_url, _ := http.ParseURL(proxy)
-		tcp, err = net.Dial("tcp", "", proxy_url.Host)
-	} else {
-		tcp, err = net.Dial("tcp", "", host)
-	}
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
-		os.Exit(1)
-	}
-
-	var conn *http.ClientConn
-	if *useSSL {
-		cf := &tls.Config{Rand: rand.Reader, Time: time.Nanoseconds}
-		ssl := tls.Client(tcp, cf)
-		conn = http.NewClientConn(ssl, nil)
-		if len(proxy) > 0 {
-			tcp.Write([]byte("CONNECT " + host + " HTTP/1.0\r\n\r\n"))
-			b := make([]byte, 1024)
-			tcp.Read(b)
-		}
-		defer ssl.Close()
-	} else {
-		conn = http.NewClientConn(tcp, nil)
-	}
-	defer conn.Close()
-	defer tcp.Close()
-
 	session := &Session{
 		scheme:  scheme,
 		host:    host,
-		tcp:     tcp,
-		conn:    conn,
-		headers: make(map[string]string),
+		conn:    dial(host),
+		headers: map[string]string{"Host": host},
 		cookies: make(map[string]*Cookie),
 		path:    path,
 	}
-	session.headers["Host"] = host
-
+	defer session.close()
 	done := false
 	for !done {
-		done = session.REPL()
+		done = session.repl()
 	}
 }
