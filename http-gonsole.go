@@ -150,11 +150,24 @@ func (s Session) REPL() bool {
 		if *line == "//" {
 			s.path.Resize(0, 0)
 		} else {
-			pp := strings.Split(*line, "/", -1)
-			for i := range pp {
-				if len(pp[i]) > 0 || i == len(pp)-1 {
-					s.path.Push(pp[i])
+			tmp := new(vector.StringVector);
+			pp := s.path.Data();
+			for p := range pp {
+				// remove empty element "/foo//bar" must be ["foo", "bar"]
+				if len(pp[p]) > 0 {
+					tmp.Push(pp[p]);
 				}
+			}
+			pp = strings.Split(*line, "/", -1)
+			for p := range pp {
+				if len(pp[p]) > 0 || p == len(pp)-1 {
+					tmp.Push(pp[p]);
+				}
+			}
+			s.path.Resize(0, 0)
+			pp = tmp.Data();
+			for p := range pp {
+				s.path.Push(pp[p]);
 			}
 		}
 		return false
@@ -254,8 +267,10 @@ func main() {
 		}
 		scheme = targetURL.Scheme
 		pp := strings.Split(targetURL.Path, "/", -1)
-		for i := range pp {
-			path.Push(pp[i])
+		for p := range pp {
+			if len(pp[p]) > 0 || p == len(pp)-1 {
+				path.Push(pp[p]);
+			}
 		}
 	} else if *useSSL {
 		scheme = "https"
