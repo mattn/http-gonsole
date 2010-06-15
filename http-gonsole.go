@@ -305,9 +305,9 @@ func main() {
 			fmt.Fprintln(os.Stderr, "invalid host name")
 			os.Exit(-1)
 		}
-		if targetURL.Scheme == "https" {
+		if *useSSL || targetURL.Scheme == "https" {
 			*useSSL = true
-			host += ":443"
+			scheme = "https";
 		}
 		scheme = targetURL.Scheme
 		pp := strings.Split(targetURL.Path, "/", -1)
