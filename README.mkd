@@ -5,7 +5,7 @@ This is the Go port of http://github.com/cloudhead/http-console
 
 
 Prerequisite:
-=============
+-------------
 
 * readline binding
 
@@ -15,6 +15,6 @@ Prerequisite:
     make install
 
 License:
-========
+--------
 
   BSD License.
