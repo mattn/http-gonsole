@@ -147,11 +147,11 @@ func (s Session) request(method, url, data string) {
 		if len(h) > 0 {
 			re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
 			for {
-				sep := re.AllMatchesString(h, 1)
+				sep := <- re.AllMatchesStringIter(h, 1)
 				if len(sep) == 0 {
 					break
 				}
-				matches := strings.Split(sep[0], ";", 999)
+				matches := strings.Split(sep, ";", 999)
 				key := ""
 				cookie := &Cookie{"", make(map[string]string)}
 				for n := range matches {
@@ -164,7 +164,7 @@ func (s Session) request(method, url, data string) {
 					}
 				}
 				s.cookies[key] = cookie
-				h = h[len(sep[0]):]
+				h = h[len(sep):]
 			}
 		}
 	}
@@ -185,7 +185,7 @@ func (s Session) request(method, url, data string) {
 // Parse a single command and execute it. (REPL without the loop)
 // Return true when the quit command is given.
 func (s Session) repl() bool {
-	prompt := "\x1b[90m" + s.scheme + "://" + s.host + "/" + strings.Join(s.path.Data(), "/") + "> \x1b[39m"
+	prompt := "\x1b[90m" + s.scheme + "://" + s.host + "/" + strings.Join(s.path.Copy(), "/") + "> \x1b[39m"
 	line := readline.ReadLine(&prompt)
 	if len(*line) == 0 {
 		return false
@@ -196,7 +196,7 @@ func (s Session) repl() bool {
 			s.path.Resize(0, 0)
 		} else {
 			tmp := new(vector.StringVector)
-			pp := s.path.Data()
+			pp := s.path.Copy()
 			for p := range pp {
 				// remove empty element "/foo//bar" must be ["foo", "bar"]
 				if len(pp[p]) > 0 {
@@ -210,7 +210,7 @@ func (s Session) repl() bool {
 				}
 			}
 			s.path.Resize(0, 0)
-			pp = tmp.Data()
+			pp = tmp.Copy()
 			for p := range pp {
 				s.path.Push(pp[p])
 			}
@@ -225,10 +225,12 @@ func (s Session) repl() bool {
 	}
 	if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]*:.*", *line); match {
 		re, _ := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]*):[:space:]*(.*)[:space]*$")
-		matches := re.MatchStrings(*line)
-		s.headers[matches[1]] = matches[2]
+		iter := re.AllMatchesStringIter(*line, 2)
+		key := <- iter;
+		val := <- iter;
+		s.headers[key] = val;
 		tmp := make(map[string]string)
-		for key, val := range s.headers {
+		for key, val = range s.headers {
 			if len(val) > 0 {
 				tmp[key] = val
 			}
@@ -238,12 +240,12 @@ func (s Session) repl() bool {
 	}
 	if match, _ := regexp.MatchString("^(GET|POST|PUT|HEAD|DELETE)(.*)$", *line); match {
 		re, _ := regexp.Compile("^(GET|POST|PUT|HEAD|DELETE)(.*)$")
-		matches := re.MatchStrings(*line)
-		if len(matches) > 0 {
-			method := matches[1]
-			tmp := strings.TrimSpace(matches[2])
+		iter := re.AllMatchesStringIter(*line, 2)
+		if iter != nil {
+			method := <- iter;
+			tmp := strings.TrimSpace(<- iter)
 			if len(tmp) == 0 {
-				tmp = "/" + strings.Join(s.path.Data(), "/")
+				tmp = "/" + strings.Join(s.path.Copy(), "/")
 			}
 			data := ""
 			if method == "POST" || method == "PUT" {
