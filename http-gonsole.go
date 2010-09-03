@@ -27,13 +27,6 @@ var (
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 )
 
-func bool2string(b bool) string {
-	if b {
-		return "true"
-	}
-	return "false"
-}
-
 type myCloser struct {
 	io.Reader
 }
@@ -268,7 +261,7 @@ func (s Session) repl() bool {
 		return false
 	}
 	if *line == "\\options" {
-		fmt.Println("useSSL=" + bool2string(*useSSL) + ", rememberCookies=" + bool2string(*rememberCookies))
+		fmt.Printf("useSSL=%v, rememberCookies=%v\n", *useSSL, *rememberCookies)
 		return false
 	}
 	if *line == "\\help" {
