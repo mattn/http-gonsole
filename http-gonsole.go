@@ -27,15 +27,14 @@ var (
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 )
 
-// Default color scheme
-// Color escapes ref: http://linuxgazette.net/issue65/padala.html
+// Color scheme, ref: http://linuxgazette.net/issue65/padala.html
 const (
 	C_Prompt = "\x1b[90m"
 	C_Header = "\x1b[1m"
-	C_2xx = "\x1b[32m\x1b[1m"
-	C_3xx = "\x1b[36m\x1b[1m"
-	C_4xx = "\x1b[33m\x1b[1m"
-	C_5xx = "\x1b[31m\x1b[1m"
+	C_2xx = "\x1b[1;32m"
+	C_3xx = "\x1b[1;36m"
+	C_4xx = "\x1b[1;31m"
+	C_5xx = "\x1b[1;37;41m"
 	C_Reset = "\x1b[0m"
 )
 
