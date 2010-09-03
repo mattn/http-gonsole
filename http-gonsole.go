@@ -27,6 +27,22 @@ var (
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 )
 
+// Default color scheme
+// Color escapes ref: http://linuxgazette.net/issue65/padala.html
+const (
+	C_Prompt = "\x1b[90m"
+	C_Header = "\x1b[1m"
+	C_2xx = "\x1b[32m\x1b[1m"
+	C_3xx = "\x1b[36m\x1b[1m"
+	C_4xx = "\x1b[33m\x1b[1m"
+	C_5xx = "\x1b[31m\x1b[1m"
+	C_Reset = "\x1b[0m"
+)
+
+func colorize(color, s string) string {
+	return color + s + C_Reset
+}
+
 type myCloser struct {
 	io.Reader
 }
@@ -121,17 +137,18 @@ func (s Session) request(method, url, data string) {
 		os.Exit(1)
 	}
 	if r.StatusCode >= 500 {
-		fmt.Println("\x1b[31m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		fmt.Printf(colorize(C_5xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 400 {
-		fmt.Println("\x1b[33m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		fmt.Printf(colorize(C_4xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 300 {
-		fmt.Println("\x1b[36m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		fmt.Printf(colorize(C_3xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 200 {
-		fmt.Println("\x1b[32m\x1b[1m" + r.Proto + " " + r.Status + "\x1b[39m\x1b[22m")
+		fmt.Printf(colorize(C_2xx, "%s %s\n"), r.Proto, r.Status)
 	}
 	if len(r.Header) > 0 {
 		for key, val := range r.Header {
-			fmt.Println("\x1b[1m" + key + "\x1b[22m: " + val)
+			fmt.Printf(colorize(C_Header, "%s: "), key)
+			fmt.Println(val)
 		}
 		fmt.Println()
 	}
@@ -178,7 +195,7 @@ func (s Session) request(method, url, data string) {
 // Parse a single command and execute it. (REPL without the loop)
 // Return true when the quit command is given.
 func (s Session) repl() bool {
-	prompt := "\x1b[90m" + s.scheme + "://" + s.host + "/" + strings.Join(s.path.Copy(), "/") + "> \x1b[39m"
+	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s/%s> "), s.scheme, s.host, strings.Join(s.path.Copy(), "/"))
 	line := readline.ReadLine(&prompt)
 	if len(*line) == 0 {
 		return false
@@ -276,7 +293,7 @@ func (s Session) repl() bool {
 	if *line == "\\q" || *line == "\\exit" {
 		return true
 	}
-	os.Stderr.WriteString("\x1b[33m\x1b[1munknown command '" + *line + "'\x1b[39m\x1b[22m\n")
+	fmt.Fprintln(os.Stderr, "unknown command:", *line)
 	return false
 }
 
