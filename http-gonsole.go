@@ -196,8 +196,8 @@ func (s Session) request(method, url, data string) {
 func (s Session) repl() bool {
 	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s/%s> "), s.scheme, s.host, strings.Join(s.path.Copy(), "/"))
 	line := readline.ReadLine(&prompt)
-	if len(*line) == 0 {
-		return false
+	if line == nil {
+		return true
 	}
 	readline.AddHistory(*line)
 	if match, _ := regexp.MatchString("^/[^ ]*$", *line); match {
