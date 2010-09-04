@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	colors = flag.Bool("colors", true, "colorful output")
+	colors          = flag.Bool("colors", true, "colorful output")
 	useSSL          = flag.Bool("ssl", false, "use SSL")
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 )
@@ -32,11 +32,11 @@ var (
 const (
 	C_Prompt = "\x1b[90m"
 	C_Header = "\x1b[1m"
-	C_2xx = "\x1b[1;32m"
-	C_3xx = "\x1b[1;36m"
-	C_4xx = "\x1b[1;31m"
-	C_5xx = "\x1b[1;37;41m"
-	C_Reset = "\x1b[0m"
+	C_2xx    = "\x1b[1;32m"
+	C_3xx    = "\x1b[1;36m"
+	C_4xx    = "\x1b[1;31m"
+	C_5xx    = "\x1b[1;37;41m"
+	C_Reset  = "\x1b[0m"
 )
 
 func colorize(color, s string) string {
@@ -165,7 +165,7 @@ func (s Session) request(method, url, data string) {
 		if len(h) > 0 {
 			re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
 			for {
-				sep := <- re.AllMatchesStringIter(h, 1)
+				sep := <-re.AllMatchesStringIter(h, 1)
 				if len(sep) == 0 {
 					break
 				}
@@ -244,9 +244,9 @@ func (s Session) repl() bool {
 	if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]*:.*", *line); match {
 		re, _ := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]*):[:space:]*(.*)[:space]*$")
 		iter := re.AllMatchesStringIter(*line, 2)
-		key := <- iter;
-		val := <- iter;
-		s.headers[key] = val;
+		key := <-iter
+		val := <-iter
+		s.headers[key] = val
 		tmp := make(map[string]string)
 		for key, val = range s.headers {
 			if len(val) > 0 {
@@ -260,8 +260,8 @@ func (s Session) repl() bool {
 		re, _ := regexp.Compile("^(GET|POST|PUT|HEAD|DELETE)(.*)$")
 		iter := re.AllMatchesStringIter(*line, 2)
 		if iter != nil {
-			method := <- iter;
-			tmp := strings.TrimSpace(<- iter)
+			method := <-iter
+			tmp := strings.TrimSpace(<-iter)
 			if len(tmp) == 0 {
 				tmp = "/" + strings.Join(s.path.Copy(), "/")
 			}
@@ -329,7 +329,7 @@ func main() {
 		}
 		if *useSSL || targetURL.Scheme == "https" {
 			*useSSL = true
-			scheme = "https";
+			scheme = "https"
 		}
 		scheme = targetURL.Scheme
 		pp := strings.Split(targetURL.Path, "/", -1)
