@@ -241,18 +241,14 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]*:.*", *line); match {
-		re, _ := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]*):[:space:]*(.*)[:space]*$")
-		iter := re.AllMatchesStringIter(*line, 2)
-		key := <-iter
-		val := <-iter
-		s.headers[key] = val
-		tmp := make(map[string]string)
-		for key, val = range s.headers {
-			if len(val) > 0 {
-				tmp[key] = val
-			}
-			s.headers = tmp
+	if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]+:.*", *line); match {
+		re, _ := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]+):(.*)$")
+		m := re.FindStringSubmatch(*line)
+		key := m[1]
+		val := strings.TrimSpace(m[2])
+		if len(val) > 0 {
+			s.headers[key] = val
+			fmt.Fprintf(os.Stderr, "http-gonsole: new request header %q\n", key + ": " + val)
 		}
 		return false
 	}
