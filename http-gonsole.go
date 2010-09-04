@@ -325,6 +325,9 @@ func main() {
 			fmt.Fprintln(os.Stderr, "invalid host name")
 			os.Exit(-1)
 		}
+		if match, _ := regexp.MatchString("^[^:]+:[0-9]+$", host); !match {
+			host = host + ":80"
+		}
 		if *useSSL || targetURL.Scheme == "https" {
 			*useSSL = true
 			scheme = "https";
