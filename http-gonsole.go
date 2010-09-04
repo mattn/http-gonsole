@@ -273,29 +273,28 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	if *line == "\\headers" {
+	if *line == "\\headers" || *line == "\\h" {
 		for key, val := range s.headers {
 			fmt.Println(key + ": " + val)
 		}
 		return false
 	}
-	if *line == "\\cookies" {
+	if *line == "\\cookies" || *line == "\\c" {
 		for key, val := range s.cookies {
 			fmt.Println(key + ": " + val.value)
 		}
 		return false
 	}
-	if *line == "\\options" {
+	if *line == "\\options" || *line == "\\o" {
 		fmt.Printf("useSSL=%v, rememberCookies=%v\n", *useSSL, *rememberCookies)
 		return false
 	}
-	if *line == "\\help" {
-		fmt.Println("\\headers  show active request headers.\n" +
-			"\\options  show options.\n" +
-			"\\cookies  show client cookies.\n" +
-			"\\help     display this message.\n" +
-			"\\exit     exit console.\n" +
-			"\\q\n")
+	if *line == "\\help" || *line == "\\?" {
+		fmt.Println("\\headers, \\h    show active request headers\n" +
+			"\\options, \\o    show options\n" +
+			"\\cookies, \\c    show client cookies\n" +
+			"\\help, \\?       display this message\n" +
+			"\\exit, \\q, ^D   exit console\n")
 		return false
 	}
 	if *line == "\\q" || *line == "\\exit" {
