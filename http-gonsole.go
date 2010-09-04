@@ -266,7 +266,6 @@ func (s Session) repl() bool {
 		val := strings.TrimSpace(m[2])
 		if len(val) > 0 {
 			s.headers[key] = val
-			fmt.Fprintf(os.Stderr, "http-gonsole: new request header %q\n", key + ": " + val)
 		}
 		return false
 	}
