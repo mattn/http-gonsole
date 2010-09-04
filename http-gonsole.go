@@ -23,6 +23,7 @@ import (
 )
 
 var (
+	colors = flag.Bool("colors", true, "colorful output")
 	useSSL          = flag.Bool("ssl", false, "use SSL")
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 )
@@ -39,7 +40,10 @@ const (
 )
 
 func colorize(color, s string) string {
-	return color + s + C_Reset
+	if *colors {
+		return color + s + C_Reset
+	}
+	return s
 }
 
 type myCloser struct {
