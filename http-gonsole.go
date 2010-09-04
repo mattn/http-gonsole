@@ -8,6 +8,7 @@ import (
 	"container/vector"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"http"
@@ -320,6 +321,7 @@ func (s Session) repl() bool {
 func main() {
 	scheme := "http"
 	host := "localhost:80"
+	headers := make(map[string]string)
 	path := new(vector.StringVector)
 	flag.Parse()
 	if flag.NArg() > 0 {
@@ -345,6 +347,13 @@ func main() {
 			scheme = "https"
 		}
 		scheme = targetURL.Scheme
+		info := targetURL.Userinfo
+		if len(info) > 0 {
+		    enc := base64.URLEncoding
+		    encoded := make([]byte, enc.EncodedLen(len(info)))
+		    enc.Encode(encoded, []byte(info))
+		    headers["Authorization"] = "Basic " + string(encoded)
+		}
 		pp := strings.Split(targetURL.Path, "/", -1)
 		for p := range pp {
 			if len(pp[p]) > 0 || p == len(pp)-1 {
@@ -355,11 +364,12 @@ func main() {
 		scheme = "https"
 		host = "localhost:443"
 	}
+	headers["Host"] = host
 	session := &Session{
 		scheme:  scheme,
 		host:    host,
 		conn:    dial(host),
-		headers: map[string]string{"Host": host},
+		headers: headers,
 		cookies: make(map[string]*Cookie),
 		path:    path,
 	}
