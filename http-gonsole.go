@@ -102,7 +102,7 @@ func closeConn(conn *http.ClientConn) {
 	}
 }
 
-func (s Session) request(method, url, data string) {
+func (s Session) perform(method, url, data string) {
 	var req http.Request
 	req.URL, _ = http.ParseURL(url)
 	req.Method = method
@@ -119,31 +119,48 @@ func (s Session) request(method, url, data string) {
 		req.ContentLength = int64(len(data))
 		req.Body = myCloser{bytes.NewBufferString(data)}
 	}
+	retry := 0
+request:
 	err := s.conn.Write(&req)
-	if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
-		// the connection has been closed in an HTTP keepalive sense
-		closeConn(s.conn)
-		s.conn = dial(s.host)
-		err = s.conn.Write(&req)
-	} else if err == io.ErrUnexpectedEOF {
-		// the underlying connection has been closed "gracefully"
-		closeConn(s.conn)
-		s.conn = dial(s.host)
-		err = s.conn.Write(&req)
-	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+		if retry < 3 {
+			if err == io.ErrUnexpectedEOF {
+				// the underlying connection has been closed "gracefully"
+				retry++
+				closeConn(s.conn)
+				s.conn = dial(s.host)
+				goto request
+			} else if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
+				// the connection has been closed in an HTTP keepalive sense
+				retry++
+				closeConn(s.conn)
+				s.conn = dial(s.host)
+				goto request
+			}
+		}
+		fmt.Fprintln(os.Stderr, "http-gonsole: could not send request:", err)
 		os.Exit(1)
 	}
+response:
 	r, err := s.conn.Read()
-	if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
-		// the remote requested that this be the last request serviced,
-		// we can defer closeConn and re-dial here but that will also happen
-		// when the next s.conn.Write request fails
-	} else if err != nil {
-		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+	if err != nil {
+		if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
+			// the remote requested that this be the last request serviced,
+			// we proceed as the response is still valid
+			defer closeConn(s.conn)
+			defer func(){ s.conn = dial(s.host) }()
+			goto output
+		} else if err == io.ErrUnexpectedEOF && retry < 3 {
+			// the remote took the request but then closed the conn, we must start over
+			retry++
+			closeConn(s.conn)
+			s.conn = dial(s.host)
+			goto request
+		}
+		fmt.Fprintln(os.Stderr, "http-gonsole: could not read response:", err)
 		os.Exit(1)
 	}
+output:
 	if r.StatusCode >= 500 {
 		fmt.Printf(colorize(C_5xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 400 {
@@ -265,7 +282,7 @@ func (s Session) repl() bool {
 			if method == "POST" || method == "PUT" {
 				data = *readline.ReadLine(nil)
 			}
-			s.request(method, s.scheme+"://"+s.host+tmp, data)
+			s.perform(method, s.scheme+"://"+s.host+tmp, data)
 		}
 		return false
 	}
