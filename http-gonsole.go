@@ -95,9 +95,11 @@ func dial(host string) (conn *http.ClientConn) {
 	return
 }
 
-func (s Session) close() {
-	tcp, _ := s.conn.Close()
-	tcp.Close()
+func closeConn(conn *http.ClientConn) {
+	tcp, _ := conn.Close()
+	if tcp != nil {
+		tcp.Close()
+	}
 }
 
 func (s Session) request(method, url, data string) {
@@ -120,10 +122,12 @@ func (s Session) request(method, url, data string) {
 	err := s.conn.Write(&req)
 	if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
 		// the connection has been closed in an HTTP keepalive sense
+		closeConn(s.conn)
 		s.conn = dial(s.host)
 		err = s.conn.Write(&req)
 	} else if err == io.ErrUnexpectedEOF {
 		// the underlying connection has been closed "gracefully"
+		closeConn(s.conn)
 		s.conn = dial(s.host)
 		err = s.conn.Write(&req)
 	}
@@ -133,8 +137,9 @@ func (s Session) request(method, url, data string) {
 	}
 	r, err := s.conn.Read()
 	if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
-		// the remote requested that this be the last request serviced
-		s.conn = dial(s.host)
+		// the remote requested that this be the last request serviced,
+		// we can defer closeConn and re-dial here but that will also happen
+		// when the next s.conn.Write request fails
 	} else if err != nil {
 		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
 		os.Exit(1)
@@ -343,7 +348,7 @@ func main() {
 		cookies: make(map[string]*Cookie),
 		path:    path,
 	}
-	defer session.close()
+	defer closeConn(session.conn)
 	done := false
 	for !done {
 		done = session.repl()
