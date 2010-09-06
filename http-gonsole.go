@@ -128,7 +128,7 @@ func (s Session) perform(method, url, data string) {
 request:
 	err := s.conn.Write(&req)
 	if err != nil {
-		if retry < 3 {
+		if retry < 2 {
 			if err == io.ErrUnexpectedEOF {
 				// the underlying connection has been closed "gracefully"
 				retry++
@@ -155,7 +155,7 @@ response:
 			defer closeConn(s.conn)
 			defer func() { s.conn = dial(s.host) }()
 			goto output
-		} else if err == io.ErrUnexpectedEOF && retry < 3 {
+		} else if err == io.ErrUnexpectedEOF && retry < 2 {
 			// the remote took the request but then closed the conn, we must start over
 			retry++
 			closeConn(s.conn)
