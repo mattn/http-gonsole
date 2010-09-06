@@ -240,30 +240,26 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]+:.*", *line); match {
-		re, _ := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]+):(.*)")
-		m := re.FindStringSubmatch(*line)
-		key := m[1]
-		val := strings.TrimSpace(m[2])
+	re := regexp.MustCompile("^([a-zA-Z][a-zA-Z0-9\\-]+):(.*)")
+	if match := re.FindStringSubmatch(*line); match != nil {
+		key := match[1]
+		val := strings.TrimSpace(match[2])
 		if len(val) > 0 {
 			s.headers[key] = val
 		}
 		return false
 	}
-	if match, _ := regexp.MatchString("^(GET|POST|PUT|HEAD|DELETE)(.*)", *line); match {
-		re, _ := regexp.Compile("^(GET|POST|PUT|HEAD|DELETE)(.*)")
-		m := re.FindStringSubmatch(*line)
-		if m != nil {
-			method := m[1]
-			p := path.Clean(path.Join(*s.path, strings.TrimSpace(m[2])))
-			data := new(string)
-			if method == "POST" || method == "PUT" {
-				prompt = colorize(C_Prompt, "... ")
-				data = readline.ReadLine(&prompt)
-				if data == nil { data = new(string) }
-			}
-			s.perform(method, s.scheme+"://"+s.host+p, *data)
+	re = regexp.MustCompile("^(GET|POST|PUT|HEAD|DELETE)(.*)")
+	if match := re.FindStringSubmatch(*line); match != nil {
+		method := match[1]
+		p := path.Clean(path.Join(*s.path, strings.TrimSpace(match[2])))
+		data := new(string)
+		if method == "POST" || method == "PUT" {
+			prompt = colorize(C_Prompt, "... ")
+			data = readline.ReadLine(&prompt)
+			if data == nil { data = new(string) }
 		}
+		s.perform(method, s.scheme+"://"+s.host+p, *data)
 		return false
 	}
 	if *line == "\\headers" || *line == "\\h" {
