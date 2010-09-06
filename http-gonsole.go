@@ -224,6 +224,7 @@ func (s Session) repl() bool {
 	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s/%s> "), s.scheme, s.host, strings.Join(s.path.Copy(), "/"))
 	line := readline.ReadLine(&prompt)
 	if line == nil {
+		fmt.Println()
 		return true
 	}
 	readline.AddHistory(*line)
