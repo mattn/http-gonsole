@@ -27,6 +27,7 @@ var (
 	colors          = flag.Bool("colors", true, "colorful output")
 	useSSL          = flag.Bool("ssl", false, "use SSL")
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
+	verbose         = flag.Bool("v", false, "be verbose, print out the request in wire format before sending")
 )
 
 // Color scheme, ref: http://linuxgazette.net/issue65/padala.html
@@ -119,6 +120,9 @@ func (s Session) perform(method, url, data string) {
 	if len(data) > 0 {
 		req.ContentLength = int64(len(data))
 		req.Body = myCloser{bytes.NewBufferString(data)}
+	}
+	if *verbose {
+		req.Write(os.Stderr)
 	}
 	retry := 0
 request:
@@ -300,7 +304,7 @@ func (s Session) repl() bool {
 		return false
 	}
 	if *line == "\\options" || *line == "\\o" {
-		fmt.Printf("useSSL=%v, rememberCookies=%v\n", *useSSL, *rememberCookies)
+		fmt.Printf("useSSL=%v, rememberCookies=%v, verbose=%v\n", *useSSL, *rememberCookies, *verbose)
 		return false
 	}
 	if *line == "\\help" || *line == "\\?" {
