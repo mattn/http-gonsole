@@ -117,12 +117,11 @@ func (s Session) perform(method, url, data string) {
 			req.Header["Cookie"] = key + "=" + cookie.value
 		}
 	}
-	if len(data) > 0 {
-		req.ContentLength = int64(len(data))
-		req.Body = myCloser{bytes.NewBufferString(data)}
-	}
+	req.ContentLength = int64(len(data))
+	req.Body = myCloser{bytes.NewBufferString(data)}
 	if *verbose {
 		req.Write(os.Stderr)
+		req.Body = myCloser{bytes.NewBufferString(data)} // must be created anew
 	}
 	retry := 0
 request:
@@ -166,6 +165,7 @@ response:
 		os.Exit(1)
 	}
 output:
+	if len(data) > 0 { fmt.Println() }
 	if r.StatusCode >= 500 {
 		fmt.Printf(colorize(C_5xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 400 {
