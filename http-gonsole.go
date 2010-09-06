@@ -5,7 +5,6 @@ package main
 
 import (
 	"bytes"
-	"container/vector"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
@@ -16,6 +15,7 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
 	"readline"
 	"regexp"
 	"strconv"
@@ -65,7 +65,7 @@ type Session struct {
 	conn    *http.ClientConn
 	headers map[string]string
 	cookies map[string]*Cookie
-	path    *vector.StringVector
+	path    *string
 }
 
 func dial(host string) (conn *http.ClientConn) {
@@ -225,47 +225,23 @@ output:
 // Parse a single command and execute it. (REPL without the loop)
 // Return true when the quit command is given.
 func (s Session) repl() bool {
-	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s/%s> "), s.scheme, s.host, strings.Join(s.path.Copy(), "/"))
+	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s> "), s.scheme, s.host, *s.path)
 	line := readline.ReadLine(&prompt)
 	if line == nil {
 		fmt.Println()
 		return true
 	}
 	readline.AddHistory(*line)
-	if match, _ := regexp.MatchString("^/[^ ]*$", *line); match {
-		if *line == "//" {
-			s.path.Resize(0, 0)
+	if match, _ := regexp.MatchString("^(/[^ \t]*)|(\\.\\.)$", *line); match {
+		if *line == "/" || *line == "//" {
+			*s.path = "/"
 		} else {
-			tmp := new(vector.StringVector)
-			pp := s.path.Copy()
-			for p := range pp {
-				// remove empty element "/foo//bar" must be ["foo", "bar"]
-				if len(pp[p]) > 0 {
-					tmp.Push(pp[p])
-				}
-			}
-			pp = strings.Split(*line, "/", -1)
-			for p := range pp {
-				if len(pp[p]) > 0 || p == len(pp)-1 {
-					tmp.Push(pp[p])
-				}
-			}
-			s.path.Resize(0, 0)
-			pp = tmp.Copy()
-			for p := range pp {
-				s.path.Push(pp[p])
-			}
-		}
-		return false
-	}
-	if *line == ".." {
-		if s.path.Len() > 0 {
-			s.path.Pop()
+			*s.path = path.Clean(path.Join(*s.path, *line))
 		}
 		return false
 	}
 	if match, _ := regexp.MatchString("^[a-zA-Z][a-zA-Z0-9\\-]+:.*", *line); match {
-		re, _ := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]+):(.*)$")
+		re, _ := regexp.Compile("^([a-zA-Z][a-zA-Z0-9\\-]+):(.*)")
 		m := re.FindStringSubmatch(*line)
 		key := m[1]
 		val := strings.TrimSpace(m[2])
@@ -274,20 +250,17 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	if match, _ := regexp.MatchString("^(GET|POST|PUT|HEAD|DELETE)(.*)$", *line); match {
-		re, _ := regexp.Compile("^(GET|POST|PUT|HEAD|DELETE)(.*)$")
-		iter := re.AllMatchesStringIter(*line, 2)
-		if iter != nil {
-			method := <-iter
-			tmp := strings.TrimSpace(<-iter)
-			if len(tmp) == 0 {
-				tmp = "/" + strings.Join(s.path.Copy(), "/")
-			}
+	if match, _ := regexp.MatchString("^(GET|POST|PUT|HEAD|DELETE)(.*)", *line); match {
+		re, _ := regexp.Compile("^(GET|POST|PUT|HEAD|DELETE)(.*)")
+		m := re.FindStringSubmatch(*line)
+		if m != nil {
+			method := m[1]
+			p := path.Clean(path.Join(*s.path, strings.TrimSpace(m[2])))
 			data := ""
 			if method == "POST" || method == "PUT" {
 				data = *readline.ReadLine(nil)
 			}
-			s.perform(method, s.scheme+"://"+s.host+tmp, data)
+			s.perform(method, s.scheme+"://"+s.host+p, data)
 		}
 		return false
 	}
@@ -326,7 +299,7 @@ func main() {
 	scheme := "http"
 	host := "localhost:80"
 	headers := make(map[string]string)
-	path := new(vector.StringVector)
+	p := "/"
 	flag.Parse()
 	if flag.NArg() > 0 {
 		tmp := flag.Arg(0)
@@ -358,12 +331,8 @@ func main() {
 			enc.Encode(encoded, []byte(info))
 			headers["Authorization"] = "Basic " + string(encoded)
 		}
-		pp := strings.Split(targetURL.Path, "/", -1)
-		for p := range pp {
-			if len(pp[p]) > 0 || p == len(pp)-1 {
-				path.Push(pp[p])
-			}
-		}
+		p = path.Clean(targetURL.Path)
+		if p == "." { p = "/" }
 	} else if *useSSL {
 		scheme = "https"
 		host = "localhost:443"
@@ -375,7 +344,7 @@ func main() {
 		conn:    dial(host),
 		headers: headers,
 		cookies: make(map[string]*Cookie),
-		path:    path,
+		path:    &p,
 	}
 	defer closeConn(session.conn)
 	done := false
