@@ -121,10 +121,10 @@ func (s Session) perform(method, url, data string) {
 	req.Body = myCloser{bytes.NewBufferString(data)}
 	if *verbose {
 		req.Write(os.Stderr)
-		req.Body = myCloser{bytes.NewBufferString(data)} // must be created anew
 	}
 	retry := 0
 request:
+	req.Body = myCloser{bytes.NewBufferString(data)} // recreate anew, in case of retry
 	err := s.conn.Write(&req)
 	if err != nil {
 		if retry < 2 {
