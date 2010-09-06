@@ -149,7 +149,7 @@ response:
 			// the remote requested that this be the last request serviced,
 			// we proceed as the response is still valid
 			defer closeConn(s.conn)
-			defer func(){ s.conn = dial(s.host) }()
+			defer func() { s.conn = dial(s.host) }()
 			goto output
 		} else if err == io.ErrUnexpectedEOF && retry < 3 {
 			// the remote took the request but then closed the conn, we must start over
@@ -349,10 +349,10 @@ func main() {
 		scheme = targetURL.Scheme
 		info := targetURL.Userinfo
 		if len(info) > 0 {
-		    enc := base64.URLEncoding
-		    encoded := make([]byte, enc.EncodedLen(len(info)))
-		    enc.Encode(encoded, []byte(info))
-		    headers["Authorization"] = "Basic " + string(encoded)
+			enc := base64.URLEncoding
+			encoded := make([]byte, enc.EncodedLen(len(info)))
+			enc.Encode(encoded, []byte(info))
+			headers["Authorization"] = "Basic " + string(encoded)
 		}
 		pp := strings.Split(targetURL.Path, "/", -1)
 		for p := range pp {
