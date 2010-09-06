@@ -256,11 +256,13 @@ func (s Session) repl() bool {
 		if m != nil {
 			method := m[1]
 			p := path.Clean(path.Join(*s.path, strings.TrimSpace(m[2])))
-			data := ""
+			data := new(string)
 			if method == "POST" || method == "PUT" {
-				data = *readline.ReadLine(nil)
+				prompt = colorize(C_Prompt, "... ")
+				data = readline.ReadLine(&prompt)
+				if data == nil { data = new(string) }
 			}
-			s.perform(method, s.scheme+"://"+s.host+p, data)
+			s.perform(method, s.scheme+"://"+s.host+p, *data)
 		}
 		return false
 	}
