@@ -9,9 +9,9 @@ Prerequisite:
 - readline binding
 
       cd $GOROOT/src/pkg
-      hg clone http://bitbucket.org/taruti/go-readline
-      cd go-readline
-      make install
+	  git clone https://github.com/kless/go-readin.git
+      cd go-readin/readin
+      gomake install
 
 License:
 --------

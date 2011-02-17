@@ -10,14 +10,15 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"github.com/kless/go-readin/readin"
 	"http"
 	"io"
 	"io/ioutil"
 	"net"
 	"os"
 	"path"
-	"readline"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ const (
 )
 
 func colorize(color, s string) string {
-	if *colors {
+	if runtime.GOOS != "windows" && *colors {
 		return color + s + C_Reset
 	}
 	return s
@@ -55,8 +56,12 @@ type myCloser struct {
 func (myCloser) Close() os.Error { return nil }
 
 type Cookie struct {
-	value   string
-	options map[string]string
+	Items    map[string]string
+	path     string
+	expires  *time.Time
+	domain   string
+	secure   bool
+	httpOnly bool
 }
 
 type Session struct {
@@ -64,7 +69,7 @@ type Session struct {
 	host    string
 	conn    *http.ClientConn
 	headers map[string]string
-	cookies map[string]*Cookie
+	cookie *Cookie
 	path    *string
 }
 
@@ -109,12 +114,12 @@ func (s Session) perform(method, url, data string) {
 	req.URL, _ = http.ParseURL(url)
 	req.Method = method
 	req.Header = s.headers
-	if len(s.cookies) > 0 {
-		for key, cookie := range s.cookies {
+	if len(s.cookie.Items) > 0 {
+		for key, value := range s.cookie.Items {
 			if len(req.Header["Cookie"]) > 0 {
 				req.Header["Cookie"] += "; "
 			}
-			req.Header["Cookie"] = key + "=" + cookie.value
+			req.Header["Cookie"] = key + "=" + value
 		}
 	}
 	req.ContentLength = int64(len(data))
@@ -146,7 +151,7 @@ request:
 		os.Exit(1)
 	}
 response:
-	r, err := s.conn.Read()
+	r, err := s.conn.Read(&req)
 	if err != nil {
 		if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
 			// the remote requested that this be the last request serviced,
@@ -154,12 +159,6 @@ response:
 			defer closeConn(s.conn)
 			defer func() { s.conn = dial(s.host) }()
 			goto output
-		} else if err == io.ErrUnexpectedEOF && retry < 2 {
-			// the remote took the request but then closed the conn, we must start over
-			retry++
-			closeConn(s.conn)
-			s.conn = dial(s.host)
-			goto request
 		}
 		fmt.Fprintln(os.Stderr, "http-gonsole: could not read response:", err)
 		os.Exit(1)
@@ -186,25 +185,36 @@ output:
 		h := r.GetHeader("Set-Cookie")
 		if len(h) > 0 {
 			re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
-			for {
-				sep := <-re.AllMatchesStringIter(h, 1)
-				if len(sep) == 0 {
-					break
-				}
-				matches := strings.Split(sep, ";", 999)
-				key := ""
-				cookie := &Cookie{"", make(map[string]string)}
-				for n := range matches {
-					tokens := strings.Split(strings.TrimSpace(matches[n]), "=", 2)
-					if n == 0 {
-						cookie.value = tokens[1]
-						key = tokens[0]
-					} else {
-						cookie.options[strings.TrimSpace(tokens[0])] = strings.TrimSpace(tokens[1])
+			rs := re.FindAllString(h, -1)
+			for _, ss := range rs {
+				m := strings.Split(ss, ";", -1)
+				cookie := new(Cookie)
+				for _, n := range m {
+					t := strings.Split(n, "=", 2)
+					if len(t) == 2 {
+						t[0] = strings.Trim(t[0], " ")
+						t[1] = strings.Trim(t[1], " ")
+						switch t[0] {
+						case "domain":
+							cookie.domain = t[1]
+						case "path":
+							cookie.path = t[1]
+						case "expires":
+							tm, err := time.Parse("Fri, 02-Jan-2006 15:04:05 MST", t[1])
+							if err != nil {
+								tm, err = time.Parse("Fri, 02-Jan-2006 15:04:05 -0700", t[1])
+							}
+							cookie.expires = tm
+						case "secure":
+							cookie.secure = true
+						case "HttpOnly":
+							cookie.httpOnly = true
+						default:
+							cookie.Items[t[0]] = t[1]
+						}
 					}
 				}
-				s.cookies[key] = cookie
-				h = h[len(sep):]
+				s.cookie = cookie
 			}
 		}
 	}
@@ -225,23 +235,22 @@ output:
 // Parse a single command and execute it. (REPL without the loop)
 // Return true when the quit command is given.
 func (s Session) repl() bool {
-	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s> "), s.scheme, s.host, *s.path)
-	line := readline.ReadLine(&prompt)
-	if line == nil {
+	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s"), s.scheme, s.host, *s.path)
+	line, err := readin.Prompt(prompt, "")
+	if err != nil || line == "" {
 		fmt.Println()
 		return true
 	}
-	readline.AddHistory(*line)
-	if match, _ := regexp.MatchString("^(/[^ \t]*)|(\\.\\.)$", *line); match {
-		if *line == "/" || *line == "//" {
+	if match, _ := regexp.MatchString("^(/[^ \t]*)|(\\.\\.)$", line); match {
+		if line == "/" || line == "//" {
 			*s.path = "/"
 		} else {
-			*s.path = path.Clean(path.Join(*s.path, *line))
+			*s.path = strings.Replace(path.Clean(path.Join(*s.path, line)), "\\", "/", -1)
 		}
 		return false
 	}
 	re := regexp.MustCompile("^([a-zA-Z][a-zA-Z0-9\\-]+):(.*)")
-	if match := re.FindStringSubmatch(*line); match != nil {
+	if match := re.FindStringSubmatch(line); match != nil {
 		key := match[1]
 		val := strings.TrimSpace(match[2])
 		if len(val) > 0 {
@@ -250,35 +259,34 @@ func (s Session) repl() bool {
 		return false
 	}
 	re = regexp.MustCompile("^(GET|POST|PUT|HEAD|DELETE)(.*)")
-	if match := re.FindStringSubmatch(*line); match != nil {
+	if match := re.FindStringSubmatch(line); match != nil {
 		method := match[1]
-		p := path.Clean(path.Join(*s.path, strings.TrimSpace(match[2])))
-		data := new(string)
+		p := strings.Replace(path.Clean(path.Join(*s.path, strings.TrimSpace(match[2]))), "\\", "/", -1)
+		data := ""
 		if method == "POST" || method == "PUT" {
-			prompt = colorize(C_Prompt, "... ")
-			data = readline.ReadLine(&prompt)
-			if data == nil { data = new(string) }
+			prompt = colorize(C_Prompt, "...")
+			data, _ = readin.Prompt(prompt, "")
 		}
-		s.perform(method, s.scheme+"://"+s.host+p, *data)
+		s.perform(method, s.scheme+"://"+s.host+p, data)
 		return false
 	}
-	if *line == "\\headers" || *line == "\\h" {
+	if line == "\\headers" || line == "\\h" {
 		for key, val := range s.headers {
 			fmt.Println(key + ": " + val)
 		}
 		return false
 	}
-	if *line == "\\cookies" || *line == "\\c" {
-		for key, val := range s.cookies {
-			fmt.Println(key + ": " + val.value)
+	if line == "\\cookies" || line == "\\c" {
+		for key, val := range s.cookie.Items {
+			fmt.Println(key + ": " + val)
 		}
 		return false
 	}
-	if *line == "\\options" || *line == "\\o" {
+	if line == "\\options" || line == "\\o" {
 		fmt.Printf("useSSL=%v, rememberCookies=%v, verbose=%v\n", *useSSL, *rememberCookies, *verbose)
 		return false
 	}
-	if *line == "\\help" || *line == "\\?" {
+	if line == "\\help" || line == "\\?" {
 		fmt.Println("\\headers, \\h    show active request headers\n" +
 			"\\options, \\o    show options\n" +
 			"\\cookies, \\c    show client cookies\n" +
@@ -286,10 +294,10 @@ func (s Session) repl() bool {
 			"\\exit, \\q, ^D   exit console\n")
 		return false
 	}
-	if *line == "\\q" || *line == "\\exit" {
+	if line == "\\q" || line == "\\exit" {
 		return true
 	}
-	fmt.Fprintln(os.Stderr, "unknown command:", *line)
+	fmt.Fprintln(os.Stderr, "unknown command:", line)
 	return false
 }
 
@@ -322,14 +330,14 @@ func main() {
 			scheme = "https"
 		}
 		scheme = targetURL.Scheme
-		info := targetURL.Userinfo
+		info := targetURL.RawUserinfo
 		if len(info) > 0 {
 			enc := base64.URLEncoding
 			encoded := make([]byte, enc.EncodedLen(len(info)))
 			enc.Encode(encoded, []byte(info))
 			headers["Authorization"] = "Basic " + string(encoded)
 		}
-		p = path.Clean(targetURL.Path)
+		p = strings.Replace(path.Clean(targetURL.Path), "\\", "/", -1)
 		if p == "." { p = "/" }
 	} else if *useSSL {
 		scheme = "https"
@@ -341,7 +349,7 @@ func main() {
 		host:    host,
 		conn:    dial(host),
 		headers: headers,
-		cookies: make(map[string]*Cookie),
+		cookie: new(Cookie),
 		path:    &p,
 	}
 	defer closeConn(session.conn)
