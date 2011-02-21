@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/tls"
-	"encoding/base64"
 	"flag"
 	"fmt"
 	"github.com/kless/go-readin/readin"
@@ -68,8 +67,8 @@ type Session struct {
 	scheme  string
 	host    string
 	conn    *http.ClientConn
-	headers map[string]string
-	cookie *Cookie
+	headers http.Header
+	cookie  *Cookie
 	path    *string
 }
 
@@ -114,14 +113,6 @@ func (s Session) perform(method, url, data string) {
 	req.URL, _ = http.ParseURL(url)
 	req.Method = method
 	req.Header = s.headers
-	if len(s.cookie.Items) > 0 {
-		for key, value := range s.cookie.Items {
-			if len(req.Header["Cookie"]) > 0 {
-				req.Header["Cookie"] += "; "
-			}
-			req.Header["Cookie"] = key + "=" + value
-		}
-	}
 	req.ContentLength = int64(len(data))
 	req.Body = myCloser{bytes.NewBufferString(data)}
 	if *verbose {
@@ -164,7 +155,9 @@ response:
 		os.Exit(1)
 	}
 output:
-	if len(data) > 0 { fmt.Println() }
+	if len(data) > 0 {
+		fmt.Println()
+	}
 	if r.StatusCode >= 500 {
 		fmt.Printf(colorize(C_5xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 400 {
@@ -182,7 +175,7 @@ output:
 		fmt.Println()
 	}
 	if *rememberCookies {
-		h := r.GetHeader("Set-Cookie")
+		h := r.Header.Get("Set-Cookie")
 		if len(h) > 0 {
 			re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
 			rs := re.FindAllString(h, -1)
@@ -218,7 +211,7 @@ output:
 			}
 		}
 	}
-	h := r.GetHeader("Content-Length")
+	h := r.Header.Get("Content-Length")
 	if len(h) > 0 {
 		n, _ := strconv.Atoi64(h)
 		b := make([]byte, n)
@@ -237,6 +230,7 @@ output:
 func (s Session) repl() bool {
 	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s"), s.scheme, s.host, *s.path)
 	line, err := readin.Prompt(prompt, "")
+	line = strings.Trim(line, "\r")
 	if err != nil || line == "" {
 		fmt.Println()
 		return true
@@ -254,7 +248,7 @@ func (s Session) repl() bool {
 		key := match[1]
 		val := strings.TrimSpace(match[2])
 		if len(val) > 0 {
-			s.headers[key] = val
+			s.headers.Set(key, val)
 		}
 		return false
 	}
@@ -271,8 +265,10 @@ func (s Session) repl() bool {
 		return false
 	}
 	if line == "\\headers" || line == "\\h" {
-		for key, val := range s.headers {
-			fmt.Println(key + ": " + val)
+		for key, arr := range s.headers {
+			for _, val := range arr {
+				fmt.Println(key + ": " + val)
+			}
 		}
 		return false
 	}
@@ -304,7 +300,7 @@ func (s Session) repl() bool {
 func main() {
 	scheme := "http"
 	host := "localhost:80"
-	headers := make(map[string]string)
+	headers := make(http.Header)
 	p := "/"
 	flag.Parse()
 	if flag.NArg() > 0 {
@@ -330,26 +326,21 @@ func main() {
 			scheme = "https"
 		}
 		scheme = targetURL.Scheme
-		info := targetURL.RawUserinfo
-		if len(info) > 0 {
-			enc := base64.URLEncoding
-			encoded := make([]byte, enc.EncodedLen(len(info)))
-			enc.Encode(encoded, []byte(info))
-			headers["Authorization"] = "Basic " + string(encoded)
-		}
 		p = strings.Replace(path.Clean(targetURL.Path), "\\", "/", -1)
-		if p == "." { p = "/" }
+		if p == "." {
+			p = "/"
+		}
 	} else if *useSSL {
 		scheme = "https"
 		host = "localhost:443"
 	}
-	headers["Host"] = host
+	headers.Set("Host", host)
 	session := &Session{
 		scheme:  scheme,
 		host:    host,
 		conn:    dial(host),
 		headers: headers,
-		cookie: new(Cookie),
+		cookie:  new(Cookie),
 		path:    &p,
 	}
 	defer closeConn(session.conn)
