@@ -68,7 +68,7 @@ type Session struct {
 	host    string
 	conn    *http.ClientConn
 	headers http.Header
-	cookie  *Cookie
+	cookies *[]*Cookie
 	path    *string
 }
 
@@ -168,46 +168,50 @@ output:
 		fmt.Printf(colorize(C_2xx, "%s %s\n"), r.Proto, r.Status)
 	}
 	if len(r.Header) > 0 {
-		for key, val := range r.Header {
-			fmt.Printf(colorize(C_Header, "%s: "), key)
-			fmt.Println(val)
+		for key, arr := range r.Header {
+			for _, val := range arr {
+				fmt.Printf(colorize(C_Header, "%s: "), key)
+				fmt.Println(val)
+			}
 		}
 		fmt.Println()
 	}
 	if *rememberCookies {
-		h := r.Header.Get("Set-Cookie")
-		if len(h) > 0 {
-			re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
-			rs := re.FindAllString(h, -1)
-			for _, ss := range rs {
-				m := strings.Split(ss, ";", -1)
+		if cookies, found := r.Header["Set-Cookie"]; found {
+			for _, h := range cookies {
 				cookie := new(Cookie)
-				for _, n := range m {
-					t := strings.Split(n, "=", 2)
-					if len(t) == 2 {
-						t[0] = strings.Trim(t[0], " ")
-						t[1] = strings.Trim(t[1], " ")
-						switch t[0] {
-						case "domain":
-							cookie.domain = t[1]
-						case "path":
-							cookie.path = t[1]
-						case "expires":
-							tm, err := time.Parse("Fri, 02-Jan-2006 15:04:05 MST", t[1])
-							if err != nil {
-								tm, err = time.Parse("Fri, 02-Jan-2006 15:04:05 -0700", t[1])
+				cookie.Items = map[string]string{}
+				re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
+				rs := re.FindAllString(h, -1)
+				for _, ss := range rs {
+					m := strings.Split(ss, ";", -1)
+					for _, n := range m {
+						t := strings.Split(n, "=", 2)
+						if len(t) == 2 {
+							t[0] = strings.Trim(t[0], " ")
+							t[1] = strings.Trim(t[1], " ")
+							switch t[0] {
+							case "domain":
+								cookie.domain = t[1]
+							case "path":
+								cookie.path = t[1]
+							case "expires":
+								tm, err := time.Parse("Fri, 02-Jan-2006 15:04:05 MST", t[1])
+								if err != nil {
+									tm, err = time.Parse("Fri, 02-Jan-2006 15:04:05 -0700", t[1])
+								}
+								cookie.expires = tm
+							case "secure":
+								cookie.secure = true
+							case "HttpOnly":
+								cookie.httpOnly = true
+							default:
+								cookie.Items[t[0]] = t[1]
 							}
-							cookie.expires = tm
-						case "secure":
-							cookie.secure = true
-						case "HttpOnly":
-							cookie.httpOnly = true
-						default:
-							cookie.Items[t[0]] = t[1]
 						}
 					}
 				}
-				s.cookie = cookie
+				*s.cookies = append(*s.cookies, cookie)
 			}
 		}
 	}
@@ -273,8 +277,10 @@ func (s Session) repl() bool {
 		return false
 	}
 	if line == "\\cookies" || line == "\\c" {
-		for key, val := range s.cookie.Items {
-			fmt.Println(key + ": " + val)
+		for _, cookie := range *s.cookies {
+			for key, val := range cookie.Items {
+				fmt.Println(key + ": " + val)
+			}
 		}
 		return false
 	}
@@ -301,6 +307,7 @@ func main() {
 	scheme := "http"
 	host := "localhost:80"
 	headers := make(http.Header)
+	cookies := new([]*Cookie)
 	p := "/"
 	flag.Parse()
 	if flag.NArg() > 0 {
@@ -340,7 +347,7 @@ func main() {
 		host:    host,
 		conn:    dial(host),
 		headers: headers,
-		cookie:  new(Cookie),
+		cookies: cookies,
 		path:    &p,
 	}
 	defer closeConn(session.conn)
