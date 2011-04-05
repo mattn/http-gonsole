@@ -78,9 +78,9 @@ func dial(host string) (conn *http.ClientConn) {
 	proxy := os.Getenv("HTTP_PROXY")
 	if len(proxy) > 0 {
 		proxy_url, _ := http.ParseURL(proxy)
-		tcp, err = net.Dial("tcp", "", proxy_url.Host)
+		tcp, err = net.Dial("tcp", proxy_url.Host)
 	} else {
-		tcp, err = net.Dial("tcp", "", host)
+		tcp, err = net.Dial("tcp", host)
 	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "http-gonsole:", err)
@@ -141,7 +141,6 @@ request:
 		fmt.Fprintln(os.Stderr, "http-gonsole: could not send request:", err)
 		os.Exit(1)
 	}
-response:
 	r, err := s.conn.Read(&req)
 	if err != nil {
 		if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
