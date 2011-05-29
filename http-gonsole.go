@@ -286,6 +286,10 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
+	if line == "\\verbose" || line == "\\v" {
+		*verbose = ! *verbose
+		return false
+	}
 	if line == "\\options" || line == "\\o" {
 		fmt.Printf("useSSL=%v, rememberCookies=%v, verbose=%v\n", *useSSL, *rememberCookies, *verbose)
 		return false
