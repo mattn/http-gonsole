@@ -253,7 +253,15 @@ func (s Session) repl() bool {
 	re = regexp.MustCompile("^(GET|POST|PUT|HEAD|DELETE)(.*)")
 	if match := re.FindStringSubmatch(line); match != nil {
 		method := match[1]
-		p := strings.Replace(path.Clean(path.Join(*s.path, strings.TrimSpace(match[2]))), "\\", "/", -1)
+		p := strings.TrimSpace(match[2])
+		if len(p) == 0 {
+			p = "/"
+		}
+		trailingSlash := p[len(p)-1] == '/'
+		p = strings.Replace(path.Clean(path.Join(*s.path, p)), "\\", "/", -1)
+		if trailingSlash {
+			p += "/"
+		}
 		data := ""
 		if method == "POST" || method == "PUT" {
 			prompt = colorize(C_Prompt, "...")
