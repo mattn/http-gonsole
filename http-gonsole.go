@@ -76,6 +76,7 @@ type Session struct {
 func dial(host string) (conn *http.ClientConn) {
 	var tcp net.Conn
 	var err os.Error
+	fmt.Fprintf(os.Stderr, "http-gonsole: establishing a TCP connection ...\n")
 	proxy := os.Getenv("HTTP_PROXY")
 	if len(proxy) > 0 {
 		proxy_url, _ := http.ParseURL(proxy)
