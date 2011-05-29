@@ -6,12 +6,13 @@ This is the Go port of http://github.com/cloudhead/http-console
 
 Prerequisite:
 -------------
-- readline binding
+- go-readin
 
-      cd $GOROOT/src/pkg
-	  git clone https://github.com/kless/go-readin.git
-      cd go-readin/readin
-      gomake install
+    cd $GOROOT/src/pkg
+    git clone https://github.com/kless/go-readin.git
+    cd go-readin/readin
+    gomake install
+
 
 License:
 --------

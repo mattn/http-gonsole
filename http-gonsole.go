@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"github.com/kless/go-readin/readin"
@@ -75,6 +76,7 @@ type Session struct {
 func dial(host string) (conn *http.ClientConn) {
 	var tcp net.Conn
 	var err os.Error
+	fmt.Fprintf(os.Stderr, "http-gonsole: establishing a TCP connection ...\n")
 	proxy := os.Getenv("HTTP_PROXY")
 	if len(proxy) > 0 {
 		proxy_url, _ := http.ParseURL(proxy)
@@ -101,13 +103,6 @@ func dial(host string) (conn *http.ClientConn) {
 	return
 }
 
-func closeConn(conn *http.ClientConn) {
-	tcp, _ := conn.Close()
-	if tcp != nil {
-		tcp.Close()
-	}
-}
-
 func (s Session) perform(method, url, data string) {
 	var req http.Request
 	req.URL, _ = http.ParseURL(url)
@@ -127,13 +122,13 @@ request:
 			if err == io.ErrUnexpectedEOF {
 				// the underlying connection has been closed "gracefully"
 				retry++
-				closeConn(s.conn)
+				s.conn.Close()
 				s.conn = dial(s.host)
 				goto request
 			} else if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
 				// the connection has been closed in an HTTP keepalive sense
 				retry++
-				closeConn(s.conn)
+				s.conn.Close()
 				s.conn = dial(s.host)
 				goto request
 			}
@@ -146,7 +141,7 @@ request:
 		if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
 			// the remote requested that this be the last request serviced,
 			// we proceed as the response is still valid
-			defer closeConn(s.conn)
+			defer s.conn.Close()
 			defer func() { s.conn = dial(s.host) }()
 			goto output
 		}
@@ -258,7 +253,15 @@ func (s Session) repl() bool {
 	re = regexp.MustCompile("^(GET|POST|PUT|HEAD|DELETE)(.*)")
 	if match := re.FindStringSubmatch(line); match != nil {
 		method := match[1]
-		p := strings.Replace(path.Clean(path.Join(*s.path, strings.TrimSpace(match[2]))), "\\", "/", -1)
+		p := strings.TrimSpace(match[2])
+		if len(p) == 0 {
+			p = "/"
+		}
+		trailingSlash := p[len(p)-1] == '/'
+		p = strings.Replace(path.Clean(path.Join(*s.path, p)), "\\", "/", -1)
+		if trailingSlash {
+			p += "/"
+		}
 		data := ""
 		if method == "POST" || method == "PUT" {
 			prompt = colorize(C_Prompt, "...")
@@ -281,6 +284,10 @@ func (s Session) repl() bool {
 				fmt.Println(key + ": " + val)
 			}
 		}
+		return false
+	}
+	if line == "\\verbose" || line == "\\v" {
+		*verbose = ! *verbose
 		return false
 	}
 	if line == "\\options" || line == "\\o" {
@@ -332,6 +339,13 @@ func main() {
 			scheme = "https"
 		}
 		scheme = targetURL.Scheme
+		info := targetURL.RawUserinfo
+		if len(info) > 0 {
+			enc := base64.URLEncoding
+			encoded := make([]byte, enc.EncodedLen(len(info)))
+			enc.Encode(encoded, []byte(info))
+			headers.Set("Authorization", "Basic "+string(encoded))
+		}
 		p = strings.Replace(path.Clean(targetURL.Path), "\\", "/", -1)
 		if p == "." {
 			p = "/"
@@ -349,7 +363,7 @@ func main() {
 		cookies: cookies,
 		path:    &p,
 	}
-	defer closeConn(session.conn)
+	defer session.conn.Close()
 	done := false
 	for !done {
 		done = session.repl()
