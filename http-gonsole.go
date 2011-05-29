@@ -101,13 +101,6 @@ func dial(host string) (conn *http.ClientConn) {
 	return
 }
 
-func closeConn(conn *http.ClientConn) {
-	tcp, _ := conn.Close()
-	if tcp != nil {
-		tcp.Close()
-	}
-}
-
 func (s Session) perform(method, url, data string) {
 	var req http.Request
 	req.URL, _ = http.ParseURL(url)
@@ -127,13 +120,13 @@ request:
 			if err == io.ErrUnexpectedEOF {
 				// the underlying connection has been closed "gracefully"
 				retry++
-				closeConn(s.conn)
+				s.conn.Close()
 				s.conn = dial(s.host)
 				goto request
 			} else if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
 				// the connection has been closed in an HTTP keepalive sense
 				retry++
-				closeConn(s.conn)
+				s.conn.Close()
 				s.conn = dial(s.host)
 				goto request
 			}
@@ -146,7 +139,7 @@ request:
 		if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
 			// the remote requested that this be the last request serviced,
 			// we proceed as the response is still valid
-			defer closeConn(s.conn)
+			defer s.conn.Close()
 			defer func() { s.conn = dial(s.host) }()
 			goto output
 		}
@@ -349,7 +342,7 @@ func main() {
 		cookies: cookies,
 		path:    &p,
 	}
-	defer closeConn(session.conn)
+	defer session.conn.Close()
 	done := false
 	for !done {
 		done = session.repl()
