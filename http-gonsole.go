@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/tls"
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"github.com/kless/go-readin/readin"
@@ -325,6 +326,13 @@ func main() {
 			scheme = "https"
 		}
 		scheme = targetURL.Scheme
+		info := targetURL.RawUserinfo
+		if len(info) > 0 {
+			enc := base64.URLEncoding
+			encoded := make([]byte, enc.EncodedLen(len(info)))
+			enc.Encode(encoded, []byte(info))
+			headers.Set("Authorization", "Basic "+string(encoded))
+		}
 		p = strings.Replace(path.Clean(targetURL.Path), "\\", "/", -1)
 		if p == "." {
 			p = "/"
