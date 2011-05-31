@@ -250,7 +250,7 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	re = regexp.MustCompile("^(GET|POST|PUT|HEAD|DELETE)(.*)")
+	re = regexp.MustCompile("^([A-Z]+)(.*)")
 	if match := re.FindStringSubmatch(line); match != nil {
 		method := match[1]
 		p := strings.TrimSpace(match[2])
