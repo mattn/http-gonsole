@@ -257,7 +257,7 @@ func (s Session) repl() bool {
 		if len(p) == 0 {
 			p = "/"
 		}
-		trailingSlash := p[len(p)-1] == '/'
+		trailingSlash := (len(p) > 1) && (p[len(p)-1] == '/')
 		p = strings.Replace(path.Clean(path.Join(*s.path, p)), "\\", "/", -1)
 		if trailingSlash {
 			p += "/"
