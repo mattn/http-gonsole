@@ -250,14 +250,14 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	re = regexp.MustCompile("^(GET|POST|PUT|HEAD|DELETE)(.*)")
+	re = regexp.MustCompile("^([A-Z]+)(.*)")
 	if match := re.FindStringSubmatch(line); match != nil {
 		method := match[1]
 		p := strings.TrimSpace(match[2])
 		if len(p) == 0 {
 			p = "/"
 		}
-		trailingSlash := p[len(p)-1] == '/'
+		trailingSlash := (len(p) > 1) && (p[len(p)-1] == '/')
 		p = strings.Replace(path.Clean(path.Join(*s.path, p)), "\\", "/", -1)
 		if trailingSlash {
 			p += "/"
