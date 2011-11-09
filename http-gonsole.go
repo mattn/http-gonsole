@@ -4,17 +4,19 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"github.com/kless/go-readin/readin"
-	"http"
 	"io"
 	"io/ioutil"
 	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"os"
 	"path"
 	"regexp"
@@ -53,7 +55,7 @@ type myCloser struct {
 	io.Reader
 }
 
-func (myCloser) Close() os.Error { return nil }
+func (myCloser) Close() error { return nil }
 
 type Cookie struct {
 	Items    map[string]string
@@ -67,19 +69,19 @@ type Cookie struct {
 type Session struct {
 	scheme  string
 	host    string
-	conn    *http.ClientConn
+	conn    *httputil.ClientConn
 	headers http.Header
 	cookies *[]*Cookie
 	path    *string
 }
 
-func dial(host string) (conn *http.ClientConn) {
+func dial(host string) (conn *httputil.ClientConn) {
 	var tcp net.Conn
-	var err os.Error
+	var err error
 	fmt.Fprintf(os.Stderr, "http-gonsole: establishing a TCP connection ...\n")
 	proxy := os.Getenv("HTTP_PROXY")
 	if len(proxy) > 0 {
-		proxy_url, _ := http.ParseURL(proxy)
+		proxy_url, _ := url.Parse(proxy)
 		tcp, err = net.Dial("tcp", proxy_url.Host)
 	} else {
 		tcp, err = net.Dial("tcp", host)
@@ -91,21 +93,21 @@ func dial(host string) (conn *http.ClientConn) {
 	if *useSSL {
 		cf := &tls.Config{Rand: rand.Reader, Time: time.Nanoseconds}
 		ssl := tls.Client(tcp, cf)
-		conn = http.NewClientConn(ssl, nil)
+		conn = httputil.NewClientConn(ssl, nil)
 		if len(proxy) > 0 {
 			tcp.Write([]byte("CONNECT " + host + " HTTP/1.0\r\n\r\n"))
 			b := make([]byte, 1024)
 			tcp.Read(b)
 		}
 	} else {
-		conn = http.NewClientConn(tcp, nil)
+		conn = httputil.NewClientConn(tcp, nil)
 	}
 	return
 }
 
-func (s Session) perform(method, url, data string) {
+func (s Session) perform(method, uri, data string) {
 	var req http.Request
-	req.URL, _ = http.ParseURL(url)
+	req.URL, _ = url.Parse(uri)
 	req.Method = method
 	req.Header = s.headers
 	req.ContentLength = int64(len(data))
@@ -125,7 +127,7 @@ request:
 				s.conn.Close()
 				s.conn = dial(s.host)
 				goto request
-			} else if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
+			} else if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == httputil.ErrPersistEOF {
 				// the connection has been closed in an HTTP keepalive sense
 				retry++
 				s.conn.Close()
@@ -138,7 +140,7 @@ request:
 	}
 	r, err := s.conn.Read(&req)
 	if err != nil {
-		if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == http.ErrPersistEOF {
+		if protoerr, ok := err.(*http.ProtocolError); ok && protoerr == httputil.ErrPersistEOF {
 			// the remote requested that this be the last request serviced,
 			// we proceed as the response is still valid
 			defer s.conn.Close()
@@ -178,9 +180,9 @@ output:
 				re, _ := regexp.Compile("^[^=]+=[^;]+(; *(expires=[^;]+|path=[^;,]+|domain=[^;,]+|secure))*,?")
 				rs := re.FindAllString(h, -1)
 				for _, ss := range rs {
-					m := strings.Split(ss, ";", -1)
+					m := strings.Split(ss, ";")
 					for _, n := range m {
-						t := strings.Split(n, "=", 2)
+						t := strings.SplitN(n, "=", 2)
 						if len(t) == 2 {
 							t[0] = strings.Trim(t[0], " ")
 							t[1] = strings.Trim(t[1], " ")
@@ -227,7 +229,9 @@ output:
 // Return true when the quit command is given.
 func (s Session) repl() bool {
 	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s"), s.scheme, s.host, *s.path)
-	line, err := readin.Prompt(prompt, "")
+	in := bufio.NewReader(os.Stdin)
+	fmt.Printf("%s:", prompt)
+	line, err := in.ReadString('\n')
 	line = strings.Trim(line, "\r")
 	if err != nil || line == "" {
 		fmt.Println()
@@ -265,7 +269,11 @@ func (s Session) repl() bool {
 		data := ""
 		if method == "POST" || method == "PUT" {
 			prompt = colorize(C_Prompt, "...")
-			data, _ = readin.Prompt(prompt, "")
+			fmt.Printf("%s:", prompt)
+			data, err = in.ReadString('\n')
+			if err != nil {
+				return false
+			}
 		}
 		s.perform(method, s.scheme+"://"+s.host+p, data)
 		return false
@@ -287,7 +295,7 @@ func (s Session) repl() bool {
 		return false
 	}
 	if line == "\\verbose" || line == "\\v" {
-		*verbose = ! *verbose
+		*verbose = !*verbose
 		return false
 	}
 	if line == "\\options" || line == "\\o" {
@@ -321,7 +329,7 @@ func main() {
 		if match, _ := regexp.MatchString("^[^:]+(:[0-9]+)?$", tmp); match {
 			tmp = "http://" + tmp
 		}
-		targetURL, err := http.ParseURL(tmp)
+		targetURL, err := url.Parse(tmp)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "malformed URL")
 			os.Exit(-1)
