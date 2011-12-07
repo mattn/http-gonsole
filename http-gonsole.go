@@ -60,7 +60,7 @@ func (myCloser) Close() error { return nil }
 type Cookie struct {
 	Items    map[string]string
 	path     string
-	expires  *time.Time
+	expires  time.Time
 	domain   string
 	secure   bool
 	httpOnly bool
@@ -91,8 +91,16 @@ func dial(host string) (conn *httputil.ClientConn) {
 		os.Exit(1)
 	}
 	if *useSSL {
-		cf := &tls.Config{Rand: rand.Reader, Time: time.Nanoseconds}
+		cf := &tls.Config{Rand: rand.Reader, Time: time.Now}
 		ssl := tls.Client(tcp, cf)
+		if err = ssl.Handshake(); err != nil {
+			fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+			os.Exit(1)
+		}
+		if err = ssl.VerifyHostname(host); err != nil {
+			fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+			os.Exit(1)
+		}
 		conn = httputil.NewClientConn(ssl, nil)
 		if len(proxy) > 0 {
 			tcp.Write([]byte("CONNECT " + host + " HTTP/1.0\r\n\r\n"))
@@ -213,7 +221,7 @@ output:
 	}
 	h := r.Header.Get("Content-Length")
 	if len(h) > 0 {
-		n, _ := strconv.Atoi64(h)
+		n, _ := strconv.ParseInt(h, 10, 64)
 		b := make([]byte, n)
 		io.ReadFull(r.Body, b)
 		fmt.Println(string(b))
