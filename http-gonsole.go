@@ -254,6 +254,7 @@ func (s Session) repl() bool {
 	in := bufio.NewReader(os.Stdin)
 	fmt.Printf("%s:", prompt)
 	line, err := in.ReadString('\n')
+	line = strings.Trim(line, "\n")
 	line = strings.Trim(line, "\r")
 	if err != nil || line == "" {
 		fmt.Println()
