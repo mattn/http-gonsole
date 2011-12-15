@@ -252,13 +252,20 @@ output:
 func (s Session) repl() bool {
 	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s"), s.scheme, s.host, *s.path)
 	in := bufio.NewReader(os.Stdin)
-	fmt.Printf("%s:", prompt)
-	line, err := in.ReadString('\n')
-	line = strings.Trim(line, "\n")
-	line = strings.Trim(line, "\r")
-	if err != nil || line == "" {
-		fmt.Println()
-		return true
+	var err error
+	var line string
+	for {
+		fmt.Printf("%s:", prompt)
+		line, err = in.ReadString('\n')
+		if err != nil {
+			fmt.Println()
+			return true
+		}
+		line = strings.Trim(line, "\n")
+		line = strings.Trim(line, "\r")
+		if line != "" {
+			break
+		}
 	}
 	if match, _ := regexp.MatchString("^(/[^ \t]*)|(\\.\\.)$", line); match {
 		if line == "/" || line == "//" {
@@ -301,7 +308,7 @@ func (s Session) repl() bool {
 		s.perform(method, s.scheme+"://"+s.host+p, data)
 		return false
 	}
-	if line == "\\headers" || line == "\\h" {
+	if line == ".h" || line == "\\headers" {
 		for key, arr := range s.headers {
 			for _, val := range arr {
 				fmt.Println(key + ": " + val)
@@ -309,7 +316,7 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	if line == "\\cookies" || line == "\\c" {
+	if line == ".c" || line == "\\cookies" {
 		for _, cookie := range *s.cookies {
 			for key, val := range cookie.Items {
 				fmt.Println(key + ": " + val)
@@ -317,15 +324,15 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	if line == "\\verbose" || line == "\\v" {
+	if line == ".v" || line == "\\verbose" {
 		*verbose = !*verbose
 		return false
 	}
-	if line == "\\options" || line == "\\o" {
+	if line == ".o" || line == ".options" {
 		fmt.Printf("useSSL=%v, rememberCookies=%v, verbose=%v\n", *useSSL, *rememberCookies, *verbose)
 		return false
 	}
-	if line == "\\help" || line == "\\?" {
+	if line == ".?" || line == ".help" {
 		fmt.Println("\\headers, \\h    show active request headers\n" +
 			"\\options, \\o    show options\n" +
 			"\\cookies, \\c    show client cookies\n" +
@@ -333,7 +340,7 @@ func (s Session) repl() bool {
 			"\\exit, \\q, ^D   exit console\n")
 		return false
 	}
-	if line == "\\q" || line == "\\exit" {
+	if line == ".q" || line == ".exit" {
 		return true
 	}
 	fmt.Fprintln(os.Stderr, "unknown command:", line)
