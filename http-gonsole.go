@@ -28,6 +28,7 @@ import (
 var (
 	colors          = flag.Bool("colors", true, "colorful output")
 	useSSL          = flag.Bool("ssl", false, "use SSL")
+	useJSON         = flag.Bool("json", false, "use JSON")
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 	verbose         = flag.Bool("v", false, "be verbose, print out the request in wire format before sending")
 )
@@ -405,6 +406,12 @@ func main() {
 		cookies: cookies,
 		path:    &p,
 	}
+
+	if *useJSON {
+		headers.Set("Accept", "*/*")
+		headers.Set("Content-Type", "appliaction/json")
+	}
+
 	defer session.conn.Close()
 	done := false
 	for !done {
