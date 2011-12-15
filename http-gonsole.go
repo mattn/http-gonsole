@@ -79,7 +79,7 @@ func dial(host string) (conn *httputil.ClientConn) {
 	var err error
 	fmt.Fprintf(os.Stderr, "http-gonsole: establishing a TCP connection ...\n")
 	proxy := os.Getenv("HTTP_PROXY")
-	if len(proxy) > 0 {
+	if strings.Split(host, ":")[0] != "localhost" && len(proxy) > 0 {
 		proxy_url, _ := url.Parse(proxy)
 		tcp, err = net.Dial("tcp", proxy_url.Host)
 	} else {
@@ -132,7 +132,7 @@ func (s Session) perform(method, uri, data string) {
 	req.URL, _ = url.Parse(uri)
 	req.Method = method
 	req.Header = s.headers
-	req.ContentLength = int64(len(data))
+	req.ContentLength = int64(len([]byte(data)))
 	req.Body = myCloser{bytes.NewBufferString(data)}
 	if *verbose {
 		req.Write(os.Stderr)
