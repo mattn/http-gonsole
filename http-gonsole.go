@@ -6,7 +6,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	"crypto/rand"
 	"crypto/tls"
 	"encoding/base64"
 	"flag"
@@ -91,21 +90,36 @@ func dial(host string) (conn *httputil.ClientConn) {
 		os.Exit(1)
 	}
 	if *useSSL {
-		cf := &tls.Config{Rand: rand.Reader, Time: time.Now}
-		ssl := tls.Client(tcp, cf)
-		if err = ssl.Handshake(); err != nil {
-			fmt.Fprintln(os.Stderr, "http-gonsole:", err)
-			os.Exit(1)
-		}
-		if err = ssl.VerifyHostname(host); err != nil {
-			fmt.Fprintln(os.Stderr, "http-gonsole:", err)
-			os.Exit(1)
-		}
-		conn = httputil.NewClientConn(ssl, nil)
 		if len(proxy) > 0 {
-			tcp.Write([]byte("CONNECT " + host + " HTTP/1.0\r\n\r\n"))
-			b := make([]byte, 1024)
-			tcp.Read(b)
+			connReq := &http.Request{
+				Method: "CONNECT",
+				URL:    &url.URL{RawPath: host},
+				Host:   host,
+				Header: make(http.Header),
+			}
+			connReq.Write(tcp)
+			resp, err := http.ReadResponse(bufio.NewReader(tcp), connReq)
+			if resp.StatusCode != 200 {
+				fmt.Fprintln(os.Stderr, "http-gonsole:", resp.Status)
+				os.Exit(1)
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+				os.Exit(1)
+			}
+			tcp = tls.Client(tcp, nil)
+			conn = httputil.NewClientConn(tcp, nil)
+		} else {
+			tcp = tls.Client(tcp, nil)
+			conn = httputil.NewClientConn(tcp, nil)
+		}
+		if err = tcp.(*tls.Conn).Handshake(); err != nil {
+			fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+			os.Exit(1)
+		}
+		if err = tcp.(*tls.Conn).VerifyHostname(strings.Split(host, ":")[0]); err != nil {
+			fmt.Fprintln(os.Stderr, "http-gonsole:", err)
+			os.Exit(1)
 		}
 	} else {
 		conn = httputil.NewClientConn(tcp, nil)
@@ -347,12 +361,16 @@ func main() {
 			fmt.Fprintln(os.Stderr, "invalid host name")
 			os.Exit(-1)
 		}
-		if match, _ := regexp.MatchString("^[^:]+:[0-9]+$", host); !match {
-			host = host + ":80"
-		}
 		if *useSSL || targetURL.Scheme == "https" {
 			*useSSL = true
 			scheme = "https"
+		}
+		if match, _ := regexp.MatchString("^[^:]+:[0-9]+$", host); !match {
+			if *useSSL {
+				host = host + ":443"
+			} else {
+				host = host + ":80"
+			}
 		}
 		scheme = targetURL.Scheme
 		info := targetURL.RawUserinfo
