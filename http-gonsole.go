@@ -94,7 +94,7 @@ func dial(host string) (conn *httputil.ClientConn) {
 		if len(proxy) > 0 {
 			connReq := &http.Request{
 				Method: "CONNECT",
-				URL:    &url.URL{RawPath: host},
+				URL:    &url.URL{Path: host},
 				Host:   host,
 				Header: make(http.Header),
 			}
@@ -382,11 +382,10 @@ func main() {
 			}
 		}
 		scheme = targetURL.Scheme
-		info := targetURL.RawUserinfo
-		if len(info) > 0 {
+		if info := targetURL.User; info != nil {
 			enc := base64.URLEncoding
-			encoded := make([]byte, enc.EncodedLen(len(info)))
-			enc.Encode(encoded, []byte(info))
+			encoded := make([]byte, enc.EncodedLen(len(info.String())))
+			enc.Encode(encoded, []byte(info.String()))
 			headers.Set("Authorization", "Basic "+string(encoded))
 		}
 		p = strings.Replace(path.Clean(targetURL.Path), "\\", "/", -1)
