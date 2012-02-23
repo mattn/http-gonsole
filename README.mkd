@@ -17,14 +17,6 @@ Prerequisite
 
 You'll need the to install [go](http://golang.org), http-gonsole is tested with release.r57.1.
 
-You'll also need to install go-readin:
-
-    $ cd $GOROOT/src/pkg
-    $ git clone https://github.com/kless/go-readin.git
-    $ cd go-readin/readin
-    $ gomake install
-
-
 How to use
 ----------
 
