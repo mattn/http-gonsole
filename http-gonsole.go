@@ -273,6 +273,9 @@ func (s Session) repl() bool {
 			*s.path = "/"
 		} else {
 			*s.path = strings.Replace(path.Clean(path.Join(*s.path, line)), "\\", "/", -1)
+			if len(line) > 1 && line[len(line)-1] == '/' {
+				*s.path += "/"
+			}
 		}
 		return false
 	}
@@ -289,10 +292,12 @@ func (s Session) repl() bool {
 	if match := re.FindStringSubmatch(line); match != nil {
 		method := match[1]
 		p := strings.TrimSpace(match[2])
+		trailingSlash := (len(*s.path) > 1) && ((*s.path)[len(*s.path)-1] == '/')
 		if len(p) == 0 {
 			p = "/"
+		} else {
+			trailingSlash = p[len(p)-1] == '/'
 		}
-		trailingSlash := (len(p) > 1) && (p[len(p)-1] == '/')
 		p = strings.Replace(path.Clean(path.Join(*s.path, p)), "\\", "/", -1)
 		if trailingSlash {
 			p += "/"
@@ -310,7 +315,7 @@ func (s Session) repl() bool {
 		s.perform(method, s.scheme+"://"+s.host+p, data)
 		return false
 	}
-	if line == ".h" || line == "\\headers" {
+	if line == ".h" || line == ".headers" {
 		for key, arr := range s.headers {
 			for _, val := range arr {
 				fmt.Println(key + ": " + val)
@@ -318,7 +323,7 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	if line == ".c" || line == "\\cookies" {
+	if line == ".c" || line == ".cookies" {
 		for _, cookie := range *s.cookies {
 			for key, val := range cookie.Items {
 				fmt.Println(key + ": " + val)
@@ -326,7 +331,7 @@ func (s Session) repl() bool {
 		}
 		return false
 	}
-	if line == ".v" || line == "\\verbose" {
+	if line == ".v" || line == ".verbose" {
 		*verbose = !*verbose
 		return false
 	}
@@ -335,11 +340,11 @@ func (s Session) repl() bool {
 		return false
 	}
 	if line == ".?" || line == ".help" {
-		fmt.Println("\\headers, \\h    show active request headers\n" +
-			"\\options, \\o    show options\n" +
-			"\\cookies, \\c    show client cookies\n" +
-			"\\help, \\?       display this message\n" +
-			"\\exit, \\q, ^D   exit console\n")
+		fmt.Println(".headers, .h    show active request headers\n" +
+			".options, .o    show options\n" +
+			".cookies, .c    show client cookies\n" +
+			".help, .?       display this message\n" +
+			".exit, .q, ^D   exit console\n")
 		return false
 	}
 	if line == ".q" || line == ".exit" {
