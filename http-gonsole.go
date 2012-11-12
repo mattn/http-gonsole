@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
+	"github.com/sbinet/go-readline/pkg/readline"
 	"io"
 	"io/ioutil"
 	"net"
@@ -251,17 +252,16 @@ output:
 // Parse a single command and execute it. (REPL without the loop)
 // Return true when the quit command is given.
 func (s Session) repl() bool {
-	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s"), s.scheme, s.host, *s.path)
-	in := bufio.NewReader(os.Stdin)
+	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s: "), s.scheme, s.host, *s.path)
 	var err error
 	var line string
 	for {
-		fmt.Printf("%s:", prompt)
-		line, err = in.ReadString('\n')
+		pline := readline.ReadLine(&prompt)
 		if err != nil {
 			fmt.Println()
 			return true
 		}
+		line = *pline
 		line = strings.Trim(line, "\n")
 		line = strings.Trim(line, "\r")
 		if line != "" {
@@ -299,13 +299,14 @@ func (s Session) repl() bool {
 		}
 		data := ""
 		if method == "POST" || method == "PUT" {
-			prompt = colorize(C_Prompt, "...")
-			fmt.Printf("%s:", prompt)
-			data, err = in.ReadString('\n')
-			if err != nil {
+			prompt = colorize(C_Prompt, "...: ")
+			pline := readline.ReadLine(&prompt)
+			if pline == nil {
 				return false
 			}
+			data = *pline
 		}
+		readline.AddHistory(line)
 		s.perform(method, s.scheme+"://"+s.host+p, data)
 		return false
 	}
