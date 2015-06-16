@@ -10,7 +10,8 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"github.com/sbinet/go-readline/pkg/readline"
+	"github.com/mattn/go-colorable"
+	"github.com/peterh/liner"
 	"io"
 	"io/ioutil"
 	"net"
@@ -32,6 +33,7 @@ var (
 	useJSON         = flag.Bool("json", false, "use JSON")
 	rememberCookies = flag.Bool("cookies", false, "remember cookies")
 	verbose         = flag.Bool("v", false, "be verbose, print out the request in wire format before sending")
+	out             = colorable.NewColorableStdout()
 )
 
 // Color scheme, ref: http://linuxgazette.net/issue65/padala.html
@@ -46,10 +48,7 @@ const (
 )
 
 func colorize(color, s string) string {
-	if runtime.GOOS != "windows" && *colors {
-		return color + s + C_Reset
-	}
-	return s
+	return color + s + C_Reset
 }
 
 type myCloser struct {
@@ -179,18 +178,18 @@ output:
 		fmt.Println()
 	}
 	if r.StatusCode >= 500 {
-		fmt.Printf(colorize(C_5xx, "%s %s\n"), r.Proto, r.Status)
+		fmt.Fprintf(out, colorize(C_5xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 400 {
-		fmt.Printf(colorize(C_4xx, "%s %s\n"), r.Proto, r.Status)
+		fmt.Fprintf(out, colorize(C_4xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 300 {
-		fmt.Printf(colorize(C_3xx, "%s %s\n"), r.Proto, r.Status)
+		fmt.Fprintf(out, colorize(C_3xx, "%s %s\n"), r.Proto, r.Status)
 	} else if r.StatusCode >= 200 {
-		fmt.Printf(colorize(C_2xx, "%s %s\n"), r.Proto, r.Status)
+		fmt.Fprintf(out, colorize(C_2xx, "%s %s\n"), r.Proto, r.Status)
 	}
 	if len(r.Header) > 0 {
 		for key, arr := range r.Header {
 			for _, val := range arr {
-				fmt.Printf(colorize(C_Header, "%s: "), key)
+				fmt.Fprintf(out, colorize(C_Header, "%s: "), key)
 				fmt.Println(val)
 			}
 		}
@@ -252,16 +251,22 @@ output:
 // Parse a single command and execute it. (REPL without the loop)
 // Return true when the quit command is given.
 func (s Session) repl() bool {
-	prompt := fmt.Sprintf(colorize(C_Prompt, "%s://%s%s: "), s.scheme, s.host, *s.path)
+	var prompt string
+	if runtime.GOOS == "windows" {
+		prompt = fmt.Sprintf("%s://%s%s: ", s.scheme, s.host, *s.path)
+	} else {
+		prompt = fmt.Sprintf(colorize(C_Prompt, "%s://%s%s: "), s.scheme, s.host, *s.path)
+	}
 	var err error
 	var line string
+	ln := liner.NewLiner()
+	defer ln.Close()
 	for {
-		pline := readline.ReadLine(&prompt)
+		line, err = ln.Prompt(prompt)
 		if err != nil {
 			fmt.Println()
 			return true
 		}
-		line = *pline
 		line = strings.Trim(line, "\n")
 		line = strings.Trim(line, "\r")
 		if line != "" {
@@ -305,13 +310,12 @@ func (s Session) repl() bool {
 		data := ""
 		if method == "POST" || method == "PUT" {
 			prompt = colorize(C_Prompt, "...: ")
-			pline := readline.ReadLine(&prompt)
-			if pline == nil {
+			line, err = ln.Prompt(prompt)
+			if line == "" {
 				return false
 			}
-			data = *pline
 		}
-		readline.AddHistory(line)
+		ln.AppendHistory(line)
 		s.perform(method, s.scheme+"://"+s.host+p, data)
 		return false
 	}
